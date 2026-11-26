@@ -1,0 +1,19 @@
+import {mkdir,writeFile,appendFile} from "node:fs/promises";
+import {parsePullRequestUrl} from "../domain/pr-review.js";
+import {reviewPullRequest} from "../ai/pr-reviewer.js";
+const input=process.env.PULL_REQUEST_URL?.trim();if(!input)throw new Error("PULL_REQUEST_URL is required.");
+const target=parsePullRequestUrl(input),base=`https://api.github.com/repos/${target.owner}/${target.repo}/pulls/${target.number}`;
+const headers={Accept:"application/vnd.github+json","User-Agent":"FlagPilot-PR-Experiment-Agent","X-GitHub-Api-Version":"2022-11-28"};
+async function get(url:string,accept?:string):Promise<Response>{const r=await fetch(url,{headers:{...headers,...(accept?{Accept:accept}:{})},signal:AbortSignal.timeout(20000)});if(!r.ok)throw new Error(`GitHub returned HTTP ${r.status} for ${url.replace(/https:\/\/api.github.com/,"")}. Only public pull requests are supported by this workflow.`);return r;}
+const pr=await (await get(base)).json() as {title?:string;body?:string|null;html_url?:string;state?:string;head?:{ref?:string};base?:{ref?:string};changed_files?:number};
+if(pr.state!=="open")throw new Error("This pull request is not open. Review an open PR so the base/head context is current.");
+const fileRows=await (await get(`${base}/files?per_page=100`)).json() as Array<{filename?:string;patch?:string;status?:string;additions?:number;deletions?:number}>;
+if(!Array.isArray(fileRows)||fileRows.length===0)throw new Error("GitHub returned no changed files for this pull request.");
+const changedFiles=fileRows.map(x=>x.filename).filter((x):x is string=>typeof x==="string");
+const rawDiff=fileRows.map(x=>[`FILE: ${x.filename} (${x.status??"modified"}, +${x.additions??0}/-${x.deletions??0})`,x.patch??"[No textual patch available for this file.]"].join("\n")).join("\n\n");
+const truncated=rawDiff.length>36000,diff=truncated?rawDiff.slice(0,36000)+"\n[DIFF TRUNCATED: review only the supplied portion.]":rawDiff;
+const review=await reviewPullRequest({title:pr.title??"Untitled pull request",body:pr.body??"",url:pr.html_url??target.url,head:pr.head?.ref??"unknown",base:pr.base?.ref??"unknown",diff,changedFiles,truncated});
+await mkdir("artifacts",{recursive:true});const report={pullRequest:{url:target.url,title:pr.title??"",changedFiles,reportedChangedFileCount:pr.changed_files??changedFiles.length,truncated},review,createdAt:new Date().toISOString()};
+await writeFile("artifacts/pr-review.json",JSON.stringify(report,null,2));
+const lines=["## FlagPilot · PR to Experiment Review",`**Pull request:** [${target.owner}/${target.repo} #${target.number}](${target.url})`,`**Files analysed:** ${changedFiles.length}`,`**Agent verdict:** ${review.verdict}`,"",`### What changed\n${review.changeSummary}`,`### Experiment opportunity\n${review.experimentOpportunity}`,`### Hypothesis\n> ${review.hypothesis}`,`### Suggested Flagsmith setup\n- **Flag:** \`${review.flag.name}\` — ${review.flag.purpose}\n- **Control:** ${review.variants[0]!.label} (${review.variants[0]!.allocation}%)\n- **Treatment:** ${review.variants[1]!.label} (${review.variants[1]!.allocation}%)\n- **Metric:** ${review.metric.name} / \`${review.metric.eventName}\`\n- **Trigger:** ${review.metric.trigger}\n- **Instrumentation:** ${review.metric.instrumentation}`,"### Code locations to review",...review.codeTargets.map(x=>`- \`${x.file}\` — ${x.reason} Suggested change: ${x.suggestedChange}`),"### Risks",...review.risks.map(x=>`- ${x}`),"### Human approval questions",...review.approvalQuestions.map(x=>`- [ ] ${x}`),`**Estimated manual steps avoided:** ${review.manualStepsSaved}`,`**Next step:** ${review.nextStep}`,"","> Analysis only. This workflow does not edit the pull request, create Flagsmith resources or start an experiment. Those actions remain separately approval-gated.",""].join("\n");
+console.log(lines);if(process.env.GITHUB_STEP_SUMMARY)await appendFile(process.env.GITHUB_STEP_SUMMARY,lines);
