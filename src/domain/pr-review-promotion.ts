@@ -62,6 +62,8 @@ export function prepareProposalFromReview(value:unknown,options:PrReviewPromotio
   if(review.verdict!=="ready_for_experiment")throw new Error(`FlagPilot refused provisioning: the AI verdict is '${review.verdict}'. Only ready_for_experiment reviews can be promoted.`);
   if(review.metric.instrumentation!=="present"||review.instrumentationPlan.status!=="verified")throw new Error("FlagPilot refused provisioning: the metric event must be present in Gemini's review and the instrumentation plan must be verified; deterministic source evidence is checked independently.");
   if(review.codeTargets.length===0)throw new Error("FlagPilot refused provisioning: the review did not identify a concrete changed code location.");
+  const targetFiles=new Set(review.codeTargets.map(target=>target.file));
+  if(!evidence.matches.some(match=>targetFiles.has(match.file)))throw new Error("FlagPilot refused provisioning: the Flagsmith SDK event call was not found in a code location identified by the PR review.");
   if(review.implementationPlan.status==="not_applicable")throw new Error("FlagPilot refused provisioning: the AI marked implementation as not applicable.");
   const title=value.pullRequest.title.trim().replace(/\s+/g," ").slice(0,75);
   const rawProposal={
