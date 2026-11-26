@@ -100,7 +100,9 @@ The PR review can be promoted without manually retyping Gemini's recommendation:
 5. The workflow pauses at the protected `flagsmith-create` GitHub Environment. Approve only after reviewing the generated plan summary. It then runs the same read-only Flagsmith preflight and provisioning code used by the natural-language workflow.
 6. The output is a **draft** experiment with read-back evidence. SDK instrumentation and event delivery must be verified separately. Starting still requires the independent `flagsmith-start` approval.
 
-The promotion workflow rejects `needs_engineering_work` and `not_a_good_experiment` verdicts, missing or unclear instrumentation, mismatched run IDs/repositories, ungrounded code locations and invalid rollout/timeframe values. A rejected report does not reach the Flagsmith-writing job. The promotion path does not edit the PR or apply a suggested code patch; a human must implement and review code changes separately.
+The promotion workflow rejects `needs_engineering_work` and `not_a_good_experiment` verdicts, missing or unclear instrumentation, mismatched run IDs/repositories, ungrounded code locations and invalid rollout/timeframe values. It also rejects truncated diffs, incomplete changed-file counts, missing source commit SHAs, stale PR head/base commits and incomplete source scans. A deterministic scanner independently checks the changed source files at the reviewed head SHA for the exact metric event passed to a supported tracking call. This is source-code evidence only: it does not prove that an event was delivered to Flagsmith or the warehouse. The dashboard and workflow therefore require an explicit human confirmation of real event delivery before promotion. A rejected report does not reach the Flagsmith-writing job. The promotion path does not edit the PR or apply a suggested code patch; a human must implement and review code changes separately.
+
+CI checks dashboard JavaScript syntax, runs a Playwright Chromium smoke test against the actual dashboard, executes TypeScript/unit tests and validates every GitHub Actions workflow with actionlint.
 
 
 ## FlagPilot operator console
