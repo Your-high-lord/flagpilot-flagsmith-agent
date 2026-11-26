@@ -4,7 +4,7 @@ import {prepareProposalFromReview} from "../src/domain/pr-review-promotion.js";
 const repositoryFullName="Your-high-lord/flagpilot-flagsmith-agent";
 const changedFiles=["src/components/Checkout.tsx"];
 const headSha="a".repeat(40),baseSha="b".repeat(40);
-const sourceEvidence={status:"tracking_call_found" as const,eventName:"checkout_started",sourceSha:headSha,scannedFiles:1,failedFiles:[],eventLiteralFound:true,trackingCallFound:true,matches:[{file:"src/components/Checkout.tsx",line:20,api:"trackevent"}],note:"Source code only; delivery is not verified."};
+const sourceEvidence={status:"flagsmith_sdk_call_found" as const,eventName:"checkout_started",sourceSha:headSha,scannedFiles:1,failedFiles:[],eventLiteralFound:true,trackingCallFound:true,matches:[{file:"src/components/Checkout.tsx",line:20,api:"trackevent"}],note:"Source code only; delivery is not verified."};
 const goodReview={
   verdict:"ready_for_experiment",
   changeSummary:"The PR adds a new checkout CTA option.",
@@ -42,7 +42,7 @@ test("converts an eligible PR review into a deterministic Flagsmith experiment p
   assert.equal(result.proposal.treatment.allocation,50);
   assert.equal(result.proposal.metric.eventName,"checkout_started");
   assert.equal(result.source.reviewRunId,12345);
-  assert.equal(result.source.instrumentationStatus,"source_call_found");
+  assert.equal(result.source.instrumentationStatus,"flagsmith_sdk_call_found");
   assert.equal(result.source.sourceHeadSha,headSha);
 });
 test("refuses a PR review that says not a good experiment",()=>assert.throws(()=>prepareProposalFromReview(report({...goodReview,verdict:"not_a_good_experiment"}),options),/Only ready_for_experiment reviews/));
