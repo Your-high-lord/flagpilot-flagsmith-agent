@@ -33,13 +33,18 @@ const sourceExtensions=/\.(?:[cm]?[jt]sx?|py|go|rs|java|kt|swift|rb|php|cs|fs|vu
 const sourceFiles=fileRows.filter(x=>typeof x.filename==="string"&&sourceExtensions.test(x.filename));
 const sourceContents:Record<string,string>={};
 const failedSourceFiles:string[]=[];
-for(const file of sourceFiles){
+const MAX_SOURCE_FILES=100,MAX_SOURCE_BYTES=5_000_000;
+let scannedSourceBytes=0;
+for(const [index,file] of sourceFiles.entries()){
  const path=file.filename!;
+ if(index>=MAX_SOURCE_FILES){failedSourceFiles.push(path);continue;}
  const rawUrl=`https://raw.githubusercontent.com/${target.owner}/${target.repo}/${pr.head.sha}/${path.split("/").map(encodeURIComponent).join("/")}`;
  try{
   const response=await get(rawUrl);
   const body=await response.text();
   if(body.length>500000)throw new Error("Source file exceeds 500 KB scan limit.");
+  if(scannedSourceBytes+body.length>MAX_SOURCE_BYTES)throw new Error("Total source scan exceeds 5 MB safety limit.");
+  scannedSourceBytes+=body.length;
   sourceContents[path]=body;
  }catch{failedSourceFiles.push(path);}
 }
