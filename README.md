@@ -56,17 +56,31 @@ Open **Actions → Set up FlagPilot environment → Run workflow**. Defaults are
 - Project: `My first project`
 - Environment: `FlagPilot Development`
 
-The workflow uses Flagsmith CLI v2 to create the environment if it does not exist, or reuses an exact name match. It saves the project and environment identifiers as GitHub repository Variables. It does not delete or modify `Development` or `Production`.
+The workflow uses Flagsmith CLI v2 to create the environment if it does not exist, or reuses an exact name match. It reports the project ID and the newly created/reused environment's client SDK key. It does not delete or modify `Development` or `Production`. GitHub's workflow `GITHUB_TOKEN` cannot write Actions repository variables, so add the identifiers manually under **Settings → Secrets and variables → Actions → Variables**.
 
 If the CLI cannot resolve the organisation/project or cannot return the new environment's client key, stop and inspect the job error; do not create a duplicate environment manually.
 
-### 4. Connect the Flagsmith managed warehouse
+### 4. Add the Flagsmith repository variables
+
+After the setup workflow completes, add these **repository variables** under **Settings → Secrets and variables → Actions → Variables** (not Secrets):
+
+| Variable | Value |
+|---|---|
+| `FLAGSMITH_ORGANISATION` | `Asir's Org` |
+| `FLAGSMITH_PROJECT` | `My first project` |
+| `FLAGSMITH_PROJECT_ID` | The numeric project ID shown in the setup workflow summary |
+| `FLAGSMITH_ENVIRONMENT_KEY` | The public client-side SDK key shown in the setup workflow output |
+| `GEMINI_MODEL` | `gemini-3.8-flash` (optional; default used if omitted) |
+
+Do not put `FLAGSMITH_API_KEY` in repository variables. It remains an environment secret.
+
+### 5. Connect the Flagsmith managed warehouse
 
 In the Flagsmith dashboard, select **FlagPilot Development → Environment Settings → Warehouse**. Choose the managed Flagsmith warehouse, enable it and use **Send your first event**. The status can remain `Pending Connection` while the first event is processed; the documented first-event processing time can be up to a few hours. Wait until the status is `Connected` before provisioning an experiment.
 
 Native Flagsmith Experimentation is currently documented as beta/Enterprise beta. Toggle Wars organisers said participants should contact the dedicated Discord channel if licensing blocks them. Ask for hackathon access rather than trying to bypass a restriction.
 
-### 5. Approval and credential boundary
+### 6. Approval and credential boundary
 
 The `flagsmith-create` environment protects environment creation, read-only preflight and resource provisioning. The `flagsmith-start` environment independently protects starting the experiment. The Gemini planning job has no Flagsmith credential. The Management API key is available only inside the protected environments and is never sent to Gemini or the browser demo.
 
