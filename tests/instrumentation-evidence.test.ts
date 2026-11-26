@@ -24,7 +24,7 @@ test("rejects commented-out tracking calls",()=>{
  assert.equal(r.status,"event_literal_only");assert.equal(r.trackingCallFound,false);
 });
 test("rejects strings containing fake tracking calls",()=>{
- const r=scan('import flagsmith from "@flagsmith/flagsmith"; const docs=\\'flagsmith.trackEvent("CheckoutStarted")\\';');
+ const r=scan("import flagsmith from \"@flagsmith/flagsmith\"; const docs=\'flagsmith.trackEvent(\"CheckoutStarted\")\';");
  assert.equal(r.status,"event_literal_only");assert.equal(r.trackingCallFound,false);
 });
 test("rejects unrelated analytics.trackEvent",()=>{
