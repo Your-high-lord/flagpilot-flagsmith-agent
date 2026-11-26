@@ -2,7 +2,7 @@
 
 **AI-assisted, approval-gated experiment provisioning for Flagsmith.** Built for WeMakeDevs × Flagsmith Toggle Wars 2026, Track 02.
 
-FlagPilot turns a natural-language experiment request into a validated proposal, checks the target environment, creates the multivariate feature, keyed variation, metric and draft experiment with the Flagsmith Management API, and verifies the resources. Starting the experiment is a separate workflow with a second human approval.
+FlagPilot turns a natural-language experiment request into a validated proposal, checks the target environment, creates a project-level disabled multivariate feature, keyed variation, metric and draft experiment with the Flagsmith Management API, and verifies the resources. The experiment rollout is enabled only in the selected target environment. Starting the experiment is a separate workflow with a second human approval.
 
 > **Safety rule:** the AI plans; deterministic application code validates and executes a small allowlist of operations. Gemini never receives credentials and never chooses arbitrary commands or API URLs.
 
