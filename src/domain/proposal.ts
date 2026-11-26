@@ -1,3 +1,4 @@
+import {createHash} from "node:crypto";
 export interface ExperimentProposal {
   experimentName: string; featureName: string; hypothesis: string; timeframeDays: number;
   targetAudience: "all"; rolloutPercentage: number; controlLabel: string;
@@ -45,8 +46,7 @@ export function validateProposal(v: unknown): ExperimentProposal {
 }
 export function withDeterministicNames(p:ExperimentProposal,request:string,version=""):ExperimentProposal {
   const identity=request+"\\n"+version;
-  let hash=2166136261; for(const c of identity){hash^=c.charCodeAt(0);hash=Math.imul(hash,16777619);}
-  const suffix=(hash>>>0).toString(16).padStart(8,"0").slice(0,8);
+  const suffix=createHash("sha256").update(identity).digest("hex").slice(0,10);
   const base=p.featureName.replace(/^fp_/,"").slice(0,45).replace(/_+$/g,"");
   return {...p,featureName:`fp_${base}_${suffix}`.slice(0,60),experimentName:`FlagPilot: ${p.experimentName} (${suffix})`.slice(0,100),metric:{...p.metric,name:`FP ${p.metric.name} ${suffix}`.slice(0,100)} };
 }
