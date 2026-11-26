@@ -142,7 +142,7 @@ export function scanInstrumentationEvidence(input:{
     const syntactic=program.getSyntacticDiagnostics(sourceFile);
     const semantic=program.getSemanticDiagnostics(sourceFile);
     // Fail closed on semantic errors that mean a type-only binding is used as a runtime value.
-    const runtimeImportErrors=semantic.filter(diagnostic=>[1361,1362,1363,1364,1365,2693].includes(diagnostic.code));
+    const runtimeImportErrors=semantic.filter(diagnostic=>[1361,1362,1363,1364,1365,2588,2693].includes(diagnostic.code));
     if(syntactic.length>0||runtimeImportErrors.length>0){failedFiles.add(entry.path);continue;}
     if(hasTrackEventMutation(sourceFile))sdkMethodMutated=true;
 
