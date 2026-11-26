@@ -79,7 +79,9 @@ export function prepareProposalFromReview(value:unknown,options:PrReviewPromotio
     },
     metric:{name:review.metric.name,eventName:review.metric.eventName}
   };
-  const proposal=withDeterministicNames(validateProposal(rawProposal),pullRequest.url);
+  const validated=validateProposal(rawProposal);
+  const configurationVersion=JSON.stringify({sourceHeadSha:headSha,sourceBaseSha:baseSha,rolloutPercentage,timeframeDays,proposal:validated});
+  const proposal=withDeterministicNames(validated,pullRequest.url,configurationVersion);
   return{
     proposal,
     source:{
