@@ -77,7 +77,7 @@ export function validatePrReview(value:unknown,changedFiles:string[]):PrReview {
   const patchNote=str(implementation.patchNote,"implementationPlan.patchNote",700);
   if(implementationStatus==="patch_ready"){
     if(patch==="No patch generated."||!patch.includes("@@"))throw new Error("A patch-ready implementation must contain a unified diff.");
-    const paths=[...patch.matchAll(/^(?:\\+\\+\\+|---) [ab]\\/([^\\r\\n]+)$/gm)].map(m=>m[1]);
+    const paths=[...patch.matchAll(/^(?:\+\+\+|---) [ab]\/([^\r\n]+)$/gm)].map(m=>m[1]);
     const unique=[...new Set(paths)];
     if(unique.length!==1||!changedFiles.includes(unique[0]!))throw new Error("Implementation patch must target exactly one file from the reviewed PR.");
     if(patch.includes("GIT binary patch")||patch.includes("\\0"))throw new Error("Binary implementation patches are not supported.");
