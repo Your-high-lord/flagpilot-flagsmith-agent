@@ -89,6 +89,20 @@ FlagPilot also provides a read-only code-review workflow. Submit a public GitHub
 
 This is deliberately analysis-only: it does not commit code, modify the pull request, create Flagsmith resources or start an experiment. The existing separately approved provisioning and start workflows remain responsible for Flagsmith writes. The PR-review workflow must first be present on the default branch before GitHub enables manual `workflow_dispatch` from the console.
 
+### Promote a successful PR review into a Flagsmith experiment
+
+The PR review can be promoted without manually retyping Gemini's recommendation:
+
+1. Run **Analyse this PR** and wait for the review workflow to finish successfully.
+2. Inspect the complete report. Promotion is allowed only when the verdict is `ready_for_experiment`, the metric instrumentation is `present`, the instrumentation plan is `verified`, at least one code location is grounded in the changed files, and implementation is applicable.
+3. In the dashboard's **Promote an eligible PR review** panel, confirm the source run ID, choose a conservative rollout and measurement window, and explicitly request draft creation.
+4. The promotion workflow verifies that the supplied run is a successful `review-pull-request.yml` run on `main`, downloads that run's `flagpilot-pr-review` artifact, validates its provenance and schema, and converts the reviewed variants and metric into the existing strict experiment proposal format.
+5. The workflow pauses at the protected `flagsmith-create` GitHub Environment. Approve only after reviewing the generated plan summary. It then runs the same read-only Flagsmith preflight and provisioning code used by the natural-language workflow.
+6. The output is a **draft** experiment with read-back evidence. SDK instrumentation and event delivery must be verified separately. Starting still requires the independent `flagsmith-start` approval.
+
+The promotion workflow rejects `needs_engineering_work` and `not_a_good_experiment` verdicts, missing or unclear instrumentation, mismatched run IDs/repositories, ungrounded code locations and invalid rollout/timeframe values. A rejected report does not reach the Flagsmith-writing job. The promotion path does not edit the PR or apply a suggested code patch; a human must implement and review code changes separately.
+
+
 ## FlagPilot operator console
 
 The GitHub Pages site is the FlagPilot operator console. It provides the natural-language request form, proposal/resource summary, workflow timeline, evidence links and navigation to the Flagsmith SDK demo. To submit a new request from the page, connect a fine-grained GitHub personal access token restricted to this repository with **Actions: read and write** permission. The token is kept in the browser tab's session storage and is sent only to `api.github.com`; it is never sent to FlagPilot or Flagsmith servers. The Flagsmith organisation Management API key remains a protected GitHub Environment secret.
