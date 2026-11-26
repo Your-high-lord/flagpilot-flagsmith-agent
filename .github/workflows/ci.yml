@@ -12,12 +12,30 @@ concurrency:
   cancel-in-progress: true
 jobs:
   quality:
-    name: Type-check and test
+    name: Type-check, tests, browser smoke test and workflow lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
-      - run: npm test
+          cache: npm
+      - uses: actions/setup-go@v7.1.0
+        with:
+          go-version: "1.26.x"
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Check dashboard JavaScript syntax
+        run: |
+          set -euo pipefail
+          find demo -type f -name '*.js' -print0 | xargs -0 -r -n1 node --check
+      - name: Install Chromium for browser regression test
+        run: npx playwright install --with-deps chromium
+      - name: Run browser regression test
+        run: npm run test:browser
+      - name: Run TypeScript build and unit tests
+        run: npm test
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: Validate GitHub Actions workflow files
+        run: "$(go env GOPATH)/bin/actionlint" -color .github/workflows/*.yml
