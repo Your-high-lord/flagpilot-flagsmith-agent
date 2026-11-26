@@ -43,9 +43,10 @@ export function validateProposal(v: unknown): ExperimentProposal {
   if(!/^[A-Za-z][A-Za-z0-9_.:-]*$/.test(eventName)) throw new ProposalValidationError("metric.eventName contains unsupported characters.");
   return {experimentName,featureName,hypothesis,timeframeDays,targetAudience:"all",rolloutPercentage,controlLabel,treatment:{key,value:treatmentValue,allocation},metric:{name:metricName,eventName}};
 }
-export function withDeterministicNames(p:ExperimentProposal,request:string):ExperimentProposal {
-  let hash=2166136261; for(const c of request){hash^=c.charCodeAt(0);hash=Math.imul(hash,16777619);}
-  const suffix=(hash>>>0).toString(16).padStart(8,"0").slice(0,6);
+export function withDeterministicNames(p:ExperimentProposal,request:string,version=""):ExperimentProposal {
+  const identity=request+"\\n"+version;
+  let hash=2166136261; for(const c of identity){hash^=c.charCodeAt(0);hash=Math.imul(hash,16777619);}
+  const suffix=(hash>>>0).toString(16).padStart(8,"0").slice(0,8);
   const base=p.featureName.replace(/^fp_/,"").slice(0,45).replace(/_+$/g,"");
-  return {...p,featureName:`fp_${base}_${suffix}`.slice(0,60),experimentName:`FlagPilot: ${p.experimentName} (${suffix})`.slice(0,100),metric:{...p.metric,name:`FP ${p.metric.name} ${suffix}`.slice(0,100)},hypothesis:`${p.hypothesis} Planned measurement window: ${p.timeframeDays} day(s).`};
+  return {...p,featureName:`fp_${base}_${suffix}`.slice(0,60),experimentName:`FlagPilot: ${p.experimentName} (${suffix})`.slice(0,100),metric:{...p.metric,name:`FP ${p.metric.name} ${suffix}`.slice(0,100)} };
 }
