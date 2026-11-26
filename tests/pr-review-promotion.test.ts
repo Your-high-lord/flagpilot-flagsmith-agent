@@ -4,7 +4,7 @@ import {prepareProposalFromReview} from "../src/domain/pr-review-promotion.js";
 const repositoryFullName="Your-high-lord/flagpilot-flagsmith-agent";
 const changedFiles=["src/components/Checkout.tsx"];
 const headSha="a".repeat(40),baseSha="b".repeat(40);
-const sourceEvidence={status:"verified_call_found" as const,eventName:"checkout_started",sourceSha:headSha,scannedFiles:1,failedFiles:[],eventLiteralFound:true,trackingCallFound:true,matches:[{file:"src/components/Checkout.tsx",line:20,api:"trackevent"}],note:"Source code only; delivery is not verified."};
+const sourceEvidence={status:"tracking_call_found" as const,eventName:"checkout_started",sourceSha:headSha,scannedFiles:1,failedFiles:[],eventLiteralFound:true,trackingCallFound:true,matches:[{file:"src/components/Checkout.tsx",line:20,api:"trackevent"}],note:"Source code only; delivery is not verified."};
 const goodReview={
   verdict:"ready_for_experiment",
   changeSummary:"The PR adds a new checkout CTA option.",
