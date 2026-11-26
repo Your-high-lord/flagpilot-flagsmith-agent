@@ -1,0 +1,58 @@
+{
+  "proposal": {
+    "experimentName": "FlagPilot: signup_button_label_test (8d4d6f)",
+    "featureName": "fp_signup_button_label_8d4d6f",
+    "hypothesis": "New CTA wording may increase completed signups. Planned measurement window: 7 day(s).",
+    "timeframeDays": 7,
+    "targetAudience": "all",
+    "rolloutPercentage": 100,
+    "controlLabel": "Start free trial",
+    "treatment": {
+      "key": "try_it_free",
+      "value": "Try it free",
+      "allocation": 50
+    },
+    "metric": {
+      "name": "FP Demo Signup Completed 8d4d6f",
+      "eventName": "demo_signup_completed"
+    }
+  },
+  "result": {
+    "feature": {
+      "id": 305244,
+      "name": "fp_signup_button_label_8d4d6f",
+      "url": "https://app.flagsmith.com/project/55341/environment/iYiL4xcyPGndbFiQ3w5fGV/features/305244"
+    },
+    "treatment": {
+      "id": 37135,
+      "key": "try_it_free",
+      "value": "Try it free",
+      "allocation": 50
+    },
+    "metric": {
+      "id": 589,
+      "name": "FP Demo Signup Completed 8d4d6f",
+      "eventName": "demo_signup_completed"
+    },
+    "experiment": {
+      "id": 596,
+      "name": "FlagPilot: signup_button_label_test (8d4d6f)",
+      "status": "created",
+      "url": "https://app.flagsmith.com/project/55341/environment/iYiL4xcyPGndbFiQ3w5fGV/experiments/596"
+    },
+    "reused": {
+      "feature": false,
+      "variant": false,
+      "metric": false,
+      "experiment": false
+    }
+  },
+  "createdAt": "2026-11-26",
+  "dashboard": {
+    "preflight": "passed",
+    "warehouseStatus": "Connected",
+    "workflowRunId": 45793027432,
+    "workflowUrl": "https://github.com/Your-high-lord/flagpilot-flagsmith-agent/actions/runs/45793027432",
+    "evidence": "Seeded from the successful FlagPilot provisioning report; experiment is still a draft and has not been started."
+  }
+}
