@@ -4,7 +4,7 @@ export class FlagsmithApi{
  private readonly baseUrl:string;
  constructor(private readonly options:FlagsmithApiOptions){if(!options.apiKey.trim())throw new Error("FLAGSMITH_API_KEY is required.");if(!options.environmentKey.trim())throw new Error("FLAGSMITH_ENVIRONMENT_KEY is required.");this.baseUrl=(options.apiUrl||"https://api.flagsmith.com").replace(/\/+$/,"");}
  private async request<T>(path:string,method:"GET"|"POST",body?:unknown):Promise<T>{
-  const url=path.startsWith("https://")?path:this.baseUrl+"/api/v1/"+path.replace(/^\/+/,"");
+  const url=/^https?:\\/\\//.test(path)?path:this.baseUrl+"/api/v1/"+path.replace(/^\/+/,"");
   const headers:Record<string,string>={Authorization:"Api-Key "+this.options.apiKey,Accept:"application/json"};if(body!==undefined)headers["Content-Type"]="application/json";
   let response:Response;try{response=await fetch(url,{method,headers,...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(25000)});}catch(e){throw new Error("Flagsmith "+method+" "+path+" failed before receiving a response: "+(e instanceof Error?e.message:String(e)));}
   const text=await response.text();let data:unknown=null;if(text){try{data=JSON.parse(text);}catch{data=text;}}
