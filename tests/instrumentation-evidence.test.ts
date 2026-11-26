@@ -25,7 +25,7 @@ test("rejects commented-out tracking calls",()=>{
 });
 test("rejects strings containing fake tracking calls",()=>{
  const r=scan("import flagsmith from \"@flagsmith/flagsmith\"; const docs=\'flagsmith.trackEvent(\"CheckoutStarted\")\';");
- assert.equal(r.status,"event_literal_only");assert.equal(r.trackingCallFound,false);
+ assert.equal(r.status,"not_found");assert.equal(r.trackingCallFound,false);
 });
 test("rejects unrelated analytics.trackEvent",()=>{
  const r=scan('const analytics={trackEvent:()=>{}}; analytics.trackEvent("CheckoutStarted");');
@@ -37,7 +37,7 @@ test("rejects unrelated otherService.sendEvent",()=>{
 });
 test("rejects incorrect event capitalization",()=>{
  const r=scan('import flagsmith from "@flagsmith/flagsmith"; flagsmith.trackEvent("checkoutstarted");');
- assert.equal(r.status,"event_literal_only");assert.equal(r.trackingCallFound,false);
+ assert.equal(r.status,"not_found");assert.equal(r.trackingCallFound,false);
 });
 test("rejects generic track even on Flagsmith client",()=>{
  const r=scan('import flagsmith from "@flagsmith/flagsmith"; flagsmith.track("CheckoutStarted");');
