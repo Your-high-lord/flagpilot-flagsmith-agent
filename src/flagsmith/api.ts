@@ -13,6 +13,9 @@ export class FlagsmithApi{
  }
  get<T>(path:string):Promise<T>{return this.request(path,"GET");}
  post<T>(path:string,body:unknown):Promise<T>{return this.request(path,"POST",body);}
+ createProjectFeature(projectId:number,body:unknown):Promise<unknown>{return this.post(`projects/${projectId}/features/`,body);}
+ getProjectFeature(projectId:number,featureId:number):Promise<unknown>{return this.get(`projects/${projectId}/features/${featureId}/`);}
+ createFeatureVariant(projectId:number,featureId:number,body:unknown):Promise<unknown>{return this.post(`projects/${projectId}/features/${featureId}/mv-options/`,body);}
  private env(path:string):string{return `environments/${encodeURIComponent(this.options.environmentKey)}/${path}`;}
  warehouseConnections():Promise<unknown>{return this.get(this.env("warehouse-connections/"));}
  experimentMetrics():Promise<unknown>{return this.get(this.env("experiment-metrics/"));}
