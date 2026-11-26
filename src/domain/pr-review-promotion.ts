@@ -60,7 +60,7 @@ export function prepareProposalFromReview(value:unknown,options:PrReviewPromotio
   if(evidence.status!=="tracking_call_found"||evidence.eventName!==rawMetric.eventName||evidence.sourceSha!==headSha||evidence.failedFiles.length>0||evidence.matches.length===0)throw new Error("FlagPilot refused promotion: deterministic source evidence did not find the exact metric event passed to a supported tracking call at the reviewed head commit.");
   const review=validatePrReview(value.review,changedFiles);
   if(review.verdict!=="ready_for_experiment")throw new Error(`FlagPilot refused provisioning: the AI verdict is '${review.verdict}'. Only ready_for_experiment reviews can be promoted.`);
-  if(review.metric.instrumentation!=="present"||review.instrumentationPlan.status!=="verified")throw new Error("FlagPilot refused provisioning: Gemini must also identify the metric event and its instrumentation plan as present/verified; deterministic source evidence is checked independently.");
+  if(review.metric.instrumentation!=="present"||review.instrumentationPlan.status!=="verified")throw new Error("FlagPilot refused provisioning: the metric event must be present in Gemini's review and the instrumentation plan must be verified; deterministic source evidence is checked independently.");
   if(review.codeTargets.length===0)throw new Error("FlagPilot refused provisioning: the review did not identify a concrete changed code location.");
   if(review.implementationPlan.status==="not_applicable")throw new Error("FlagPilot refused provisioning: the AI marked implementation as not applicable.");
   const title=value.pullRequest.title.trim().replace(/\s+/g," ").slice(0,75);
