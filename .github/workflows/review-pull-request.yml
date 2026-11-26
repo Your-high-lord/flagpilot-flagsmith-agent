@@ -8,6 +8,8 @@ on:
         type: string
 permissions:
   contents: read
+  pages: write
+  id-token: write
 concurrency:
   group: flagpilot-pr-review-${{ github.ref }}
   cancel-in-progress: true
@@ -38,3 +40,12 @@ jobs:
           path: artifacts/pr-review.json
           if-no-files-found: error
           retention-days: 7
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload updated FlagPilot dashboard and latest report
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: demo
+      - name: Publish FlagPilot dashboard
+        id: deployment
+        uses: actions/deploy-pages@v4
