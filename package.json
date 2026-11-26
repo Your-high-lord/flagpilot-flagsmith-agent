@@ -4,7 +4,9 @@
   "private": false,
   "type": "module",
   "description": "AI-assisted code-to-experiment agent with approval-gated Flagsmith operations.",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test dist/tests/*.test.js",
@@ -13,7 +15,15 @@
     "preflight": "npm run build && node dist/src/commands/preflight.js",
     "provision": "npm run build && node dist/src/commands/provision.js",
     "start": "npm run build && node dist/src/commands/start.js",
-    "setup:environment": "npm run build && node dist/src/commands/setup-environment.js"
+    "setup:environment": "npm run build && node dist/src/commands/setup-environment.js",
+    "prepare:pr-proposal": "npm run build && node dist/src/commands/prepare-pr-proposal.js",
+    "test:browser": "node --test tests/browser-console.test.mjs",
+    "verify:pr-source": "npm run build && node dist/src/commands/verify-pr-source.js"
   },
-  "devDependencies": { "@types/node": "22.19.1", "typescript": "5.9.3" }
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "typescript": "5.9.3",
+    "playwright": "1.65.1"
+  },
+  "license": "MIT"
 }

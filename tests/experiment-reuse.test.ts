@@ -1,0 +1,25 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {verifyExistingExperimentConfiguration} from "../src/domain/experiment-reuse.js";
+import {validateProposal,type ExperimentProposal} from "../src/domain/proposal.js";
+const proposal:ExperimentProposal=validateProposal({experimentName:"CTA test",featureName:"cta_test",hypothesis:"Clearer copy increases checkout starts.",timeframeDays:7,targetAudience:"all",rolloutPercentage:25,controlLabel:"Continue",treatment:{key:"review_order",value:"Review order",allocation:40},metric:{name:"Checkout started",eventName:"CheckoutStarted"}});
+const actual=()=>({id:50,name:proposal.experimentName,hypothesis:proposal.hypothesis,status:"created",feature:{id:10,type:"MULTIVARIATE",initial_value:"control",multivariate_options:[{id:20,key:"review_order",string_value:"Review order"}]},experiment_rollout:{enabled:true,rollout_percentage:25,feature_state_value:{type:"string",value:"control"},multivariate_feature_state_values:[{multivariate_feature_option:20,percentage_allocation:40}],audience:{match:"any",segments:[]}},metrics:[{metric:30,metric_name:"Checkout started",aggregation:"occurrence",direction:"up",expected_direction:"increase"}]});
+const verify=(experiment:Record<string,unknown>,p=proposal)=>verifyExistingExperimentConfiguration({experiment,proposal:p,featureId:10,treatmentOptionId:20,metricId:30});
+test("accepts an exact matching draft configuration for safe idempotent reuse",()=>assert.doesNotThrow(()=>verify(actual())));
+test("rejects changed rollout percentage",()=>{const e=actual();(e.experiment_rollout as Record<string,unknown>).rollout_percentage=10;assert.throws(()=>verify(e),/rollout percentage differs/);});
+test("rejects changed treatment allocation",()=>{const e=actual();((e.experiment_rollout as Record<string,unknown>).multivariate_feature_state_values as Array<Record<string,unknown>>)[0]!.percentage_allocation=50;assert.throws(()=>verify(e),/treatment allocation differs/);});
+test("rejects changed treatment option ID",()=>{const e=actual();((e.experiment_rollout as Record<string,unknown>).multivariate_feature_state_values as Array<Record<string,unknown>>)[0]!.multivariate_feature_option=21;assert.throws(()=>verify(e),/treatment allocation differs/);});
+test("rejects changed treatment key or value",()=>{const e=actual();((e.feature as Record<string,unknown>).multivariate_options as Array<Record<string,unknown>>)[0]!.key="wrong";assert.throws(()=>verify(e),/variation ID, key or value differs/);});
+test("rejects changed hypothesis",()=>{const e=actual();e.hypothesis="Different hypothesis";assert.throws(()=>verify(e),/hypothesis differs/);});
+test("rejects changed metric ID or name",()=>{const e=actual();(e.metrics as Array<Record<string,unknown>>)[0]!.metric=31;assert.throws(()=>verify(e),/metric ID, name/);});
+test("rejects changed metric direction",()=>{const e=actual();(e.metrics as Array<Record<string,unknown>>)[0]!.expected_direction="decrease";assert.throws(()=>verify(e),/metric ID, name/);});
+test("rejects extra metrics",()=>{const e=actual();(e.metrics as unknown[]).push({metric:32,metric_name:"Secondary",aggregation:"occurrence",expected_direction:"increase"});assert.throws(()=>verify(e),/exactly one primary metric/);});
+test("rejects a segmented audience",()=>{const e=actual();((e.experiment_rollout as Record<string,unknown>).audience as Record<string,unknown>).segments=[{id:1}];assert.throws(()=>verify(e),/all-identities audience/);});
+test("rejects disabled rollout",()=>{const e=actual();(e.experiment_rollout as Record<string,unknown>).enabled=false;assert.throws(()=>verify(e),/rollout is disabled/);});
+test("rejects paused, running or completed experiments",()=>{for(const status of ["paused","running","completed"]){const e=actual();e.status=status;assert.throws(()=>verify(e),/untouched draft/);}});
+test("rejects missing rollout read-back",()=>{const e=actual();delete (e as Record<string,unknown>).experiment_rollout;assert.throws(()=>verify(e),/stored rollout configuration/);});
+test("rejects missing metric attachments",()=>{const e=actual();delete (e as Record<string,unknown>).metrics;assert.throws(()=>verify(e),/metric attachments/);});
+test("rejects missing audience data rather than assuming all users",()=>{const e=actual();delete (e.experiment_rollout as Record<string,unknown>).audience;assert.throws(()=>verify(e),/audience configuration/);});
+
+test("rejects a different audience match mode even when no segments are attached",()=>{const e=actual();((e.experiment_rollout as Record<string,unknown>).audience as Record<string,unknown>).match="all";assert.throws(()=>verify(e),/all-identities audience/);});
+test("rejects a metric whose inherent direction is not upward",()=>{const e=actual();(e.metrics as Array<Record<string,unknown>>)[0]!.direction="down";assert.throws(()=>verify(e),/metric ID, name, aggregation, direction/);});
