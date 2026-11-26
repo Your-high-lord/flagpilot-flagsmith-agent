@@ -39,8 +39,8 @@ jobs:
     if: ${{ inputs.confirm_provision == true && inputs.confirm_event_delivery == true }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
@@ -61,7 +61,7 @@ jobs:
           test "$(jq -r '.head_branch' <<<"$RUN")" = "main"
           echo "Verified successful FlagPilot PR review run #$REVIEW_RUN_ID."
       - name: Download source review artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.2
         with:
           name: flagpilot-pr-review
           path: artifacts/source-review
@@ -78,7 +78,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm run prepare:pr-proposal
       - name: Upload validated proposal
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: flagpilot-pr-derived-plan
           path: artifacts/plan.json
@@ -91,8 +91,8 @@ jobs:
     environment:
       name: flagsmith-create
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
@@ -107,7 +107,7 @@ jobs:
         with:
           cli-version: v2.0.0
       - name: Download validated proposal
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.2
         with:
           name: flagpilot-pr-derived-plan
           path: artifacts
@@ -126,7 +126,7 @@ jobs:
           FLAGSMITH_ENVIRONMENT: ${{ vars.FLAGSMITH_ENVIRONMENT_KEY }}
         run: npm run provision
       - name: Upload provisioning evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: flagpilot-pr-provision-result
           path: artifacts/provision-result.json
