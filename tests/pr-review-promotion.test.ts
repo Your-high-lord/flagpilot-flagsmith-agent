@@ -35,7 +35,7 @@ function report(review:unknown=goodReview,overrides:Record<string,unknown>={}){r
 const options={reviewRunId:12345,repositoryFullName,rolloutPercentage:10,timeframeDays:7,currentHeadSha:headSha,currentBaseSha:baseSha,sourceEvidence};
 test("converts an eligible PR review into a deterministic Flagsmith experiment proposal",()=>{
   const result=prepareProposalFromReview(report(),options);
-  assert.match(result.proposal.featureName,/^fp_checkout_cta_copy_[a-f0-9]{6}$/);
+  assert.match(result.proposal.featureName,/^fp_checkout_cta_copy_[a-f0-9]{10}$/);
   assert.match(result.proposal.experimentName,/^FlagPilot: PR #42:/);
   assert.equal(result.proposal.targetAudience,"all");
   assert.equal(result.proposal.rolloutPercentage,10);
