@@ -41,10 +41,10 @@ export class FlagsmithApi{
  createFeatureVariant(projectId:number,featureId:number,body:unknown):Promise<unknown>{return this.post("projects/"+projectId+"/features/"+featureId+"/mv-options/",body);}
  private env(path:string):string{return "environments/"+encodeURIComponent(this.options.environmentKey)+"/"+path;}
  warehouseConnections():Promise<unknown>{return this.get(this.env("warehouse-connections/"));}
- experimentMetrics():Promise<unknown>{return this.getAll(this.env("experiment-metrics/"));}
+ experimentMetrics():Promise<Record<string,unknown>[]>{return this.getAll(this.env("experiment-metrics/"));}
  createMetric(body:unknown):Promise<unknown>{return this.post(this.env("experiment-metrics/"),body);}
  getMetric(id:number):Promise<unknown>{return this.get(this.env("experiment-metrics/"+id+"/"));}
- experiments():Promise<unknown>{return this.getAll(this.env("experiments/"));}
+ experiments():Promise<Record<string,unknown>[]>{return this.getAll(this.env("experiments/"));}
  createExperiment(body:unknown):Promise<unknown>{return this.post(this.env("experiments/"),body);}
  experimentMetricsForExperiment(id:number):Promise<unknown>{return this.get(this.env("experiments/"+id+"/metrics/"));}
  startExperiment(id:number):Promise<unknown>{return this.request(this.env("experiments/"+id+"/start/"),"POST");}
