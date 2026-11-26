@@ -30,7 +30,8 @@ test("dashboard loads, renders report, and parses workflow run ID without browse
   await page.goto(url);await page.getByText("Example checkout change").waitFor();
   assert.equal(await page.locator("#review-run-id").inputValue(),"12345");
   assert.equal(await page.locator("#report-verdict").innerText(),"ready for experiment");
-  assert.equal(await page.locator("#delivery-verified").count(),1);
+  assert.equal(await page.locator("#promotion-confirm").count(),1);
+  assert.equal(await page.locator("#delivery-verified").count(),0);
   await page.locator("#pr-url").fill("https://github.com/example/app/pull/12");
   await page.locator("#pr-form button").click();
   await page.getByText("Connect GitHub first. The PR review request has not been sent.").waitFor();
@@ -51,7 +52,7 @@ test("dashboard submits a fully eligible authenticated promotion with explicit c
   await page.getByRole("button",{name:"Connect GitHub"}).click();
   await page.locator("#token").fill("github_pat_test_only");
   await page.locator("#save-token").click();
-  await page.locator("#delivery-verified").check();await page.locator("#promote-confirm").check();
+  await page.locator("#promotion-confirm").check();
   await page.locator("#promote-form button").click();
   await page.getByText(/Request submitted/).waitFor();
   assert.equal(dispatchBody?.inputs?.review_run_id,"12345");
@@ -72,7 +73,7 @@ test("dashboard blocks promotion when deterministic source evidence is missing",
    await route.fulfill({status:204,body:""});
   });
   await page.goto(url);await page.getByText("Example checkout change").waitFor();
-  await page.locator("#delivery-verified").check();await page.locator("#promote-confirm").check();
+  await page.locator("#promotion-confirm").check();
   await page.locator("#promote-form button").click();
   await page.getByText(/Not eligible:/).waitFor();
   assert.equal(dispatchCount,0);
@@ -102,7 +103,7 @@ test("dashboard blocks missing metric, incomplete AI evidence, and inapplicable 
   for(const mutate of cases){
    mutate();await page.goto(url);
    await page.getByText("Example checkout change").waitFor();
-   await page.locator("#delivery-verified").check();await page.locator("#promote-confirm").check();
+   await page.locator("#promotion-confirm").check();
    await page.locator("#promote-form button").click();
    await page.getByText(/Not eligible:/).waitFor();
   }
