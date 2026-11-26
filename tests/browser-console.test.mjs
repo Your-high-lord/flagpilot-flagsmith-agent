@@ -5,13 +5,14 @@ import {readFile} from "node:fs/promises";
 import {resolve,extname} from "node:path";
 import {chromium} from "playwright";
 const root=resolve("demo");
+const sha="a".repeat(40);
 const report={
- pullRequest:{url:"https://github.com/example/app/pull/12",title:"Example checkout change",changedFiles:["src/checkout.ts"],reportedChangedFileCount:1,truncated:false,headSha:"a".repeat(40),baseSha:"b".repeat(40)},
+ pullRequest:{url:"https://github.com/example/app/pull/12",title:"Example checkout change",changedFiles:["src/checkout.ts"],reportedChangedFileCount:1,truncated:false,headSha:sha,baseSha:"b".repeat(40)},
  review:{verdict:"ready_for_experiment",changeSummary:"A button label changed.",experimentOpportunity:"Test the copy.",hypothesis:"Clearer copy increases completed checkout.",flag:{name:"checkout_copy",purpose:"Choose checkout copy.",safeDefault:"control"},variants:[{key:"control",label:"Continue",allocation:50},{key:"treatment",label:"Review order",allocation:50}],metric:{name:"Checkout complete",eventName:"checkout_completed",trigger:"Successful checkout.",instrumentation:"present"},instrumentationPlan:{status:"verified",eventName:"checkout_completed",trigger:"Checkout success.",properties:[],recommendation:"Reuse event."},implementationPlan:{status:"manual_review_required",summary:"Manual review.",steps:[],tests:[],patch:"",patchNote:"Manual review."},codeTargets:[{file:"src/checkout.ts",reason:"Button.",suggestedChange:"Use a flag."}],risks:[],approvalQuestions:[],manualStepsSaved:1,nextStep:"Review."},
- instrumentationEvidence:{status:"tracking_call_found",eventName:"checkout_completed",sourceSha:"a".repeat(40),scannedFiles:1,failedFiles:[],eventLiteralFound:true,trackingCallFound:true,matches:[{file:"src/checkout.ts",line:20,api:"trackevent"}],note:"Source match only."},
+ instrumentationEvidence:{status:"flagsmith_sdk_call_found",eventName:"checkout_completed",sourceSha:sha,scannedFiles:1,failedFiles:[],eventLiteralFound:true,trackingCallFound:true,matches:[{file:"src/checkout.ts",line:20,api:"trackEvent",sdk:"@flagsmith/flagsmith",receiver:"flagsmith"}],note:"Source match only."},
  createdAt:"2026-11-27T00:00:00.000Z",workflowRunUrl:"https://github.com/Your-high-lord/flagpilot-flagsmith-agent/actions/runs/12345"
 };
-test("dashboard loads, renders review, and parses the source run ID without browser errors",async()=>{
+async function fixtureServer(){
  const server=createServer(async(req,res)=>{
   const path=new URL(req.url,"http://localhost").pathname;
   if(path==="/reports/latest.json"){res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(report));return;}
@@ -20,12 +21,13 @@ test("dashboard loads, renders review, and parses the source run ID without brow
  });
  await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
  const address=server.address();assert.ok(address&&typeof address==="object");
- const browser=await chromium.launch({headless:true});
+ return{server,url:"http://127.0.0.1:"+address.port+"/index.html"};
+}
+test("dashboard loads, renders report, and parses workflow run ID without browser errors",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
  try{
-  const page=await browser.newPage();
-  const errors=[];page.on("pageerror",e=>errors.push(e.message));
-  await page.goto(`http://127.0.0.1:${address.port}/index.html`);
-  await page.getByText("Example checkout change").waitFor();
+  const page=await browser.newPage();const errors=[];page.on("pageerror",e=>errors.push(e.message));
+  await page.goto(url);await page.getByText("Example checkout change").waitFor();
   assert.equal(await page.locator("#review-run-id").inputValue(),"12345");
   assert.equal(await page.locator("#report-verdict").innerText(),"ready for experiment");
   assert.equal(await page.locator("#delivery-verified").count(),1);
@@ -33,8 +35,47 @@ test("dashboard loads, renders review, and parses the source run ID without brow
   await page.locator("#pr-form button").click();
   await page.getByText("Connect GitHub first. The PR review request has not been sent.").waitFor();
   assert.deepEqual(errors,[]);
- }finally{
-  await browser.close();
-  await new Promise(resolve=>server.close(resolve));
- }
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+test("dashboard submits a fully eligible authenticated promotion with explicit confirmations",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();let dispatchBody=null;
+  await page.route("https://api.github.com/**",async route=>{
+   const request=route.request(),path=new URL(request.url()).pathname;
+   if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent"&&request.method()==="GET"){await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({full_name:"Your-high-lord/flagpilot-flagsmith-agent"})});return;}
+   if(path.endsWith("/actions/workflows/promote-pr-review.yml/dispatches")&&request.method()==="POST"){dispatchBody=request.postDataJSON();await route.fulfill({status:204,body:""});return;}
+   await route.fulfill({status:404,body:"not found"});
+  });
+  await page.goto(url);await page.getByText("Example checkout change").waitFor();
+  await page.getByRole("button",{name:"Connect GitHub"}).click();
+  await page.locator("#token").fill("github_pat_test_only");
+  await page.locator("#save-token").click();
+  await page.locator("#delivery-verified").check();await page.locator("#promote-confirm").check();
+  await page.locator("#promote-form button").click();
+  await page.getByText(/Request submitted/).waitFor();
+  assert.equal(dispatchBody?.inputs?.review_run_id,"12345");
+  assert.equal(dispatchBody?.inputs?.confirm_event_delivery,"true");
+  assert.equal(dispatchBody?.inputs?.confirm_provision,"true");
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+test("dashboard blocks a ready verdict when the deterministic evidence is missing",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();let dispatchCount=0;
+  await page.route("https://api.github.com/**",async route=>{if(route.request().url().includes("/dispatches"))dispatchCount++;await route.fulfill({status:200,contentType:"application/json",body:"{}"});});
+  await page.goto(url);await page.getByText("Example checkout change").waitFor();
+  await page.evaluate(()=>{const form=document.querySelector("#promote-form");form.addEventListener("submit",e=>e.preventDefault(),{once:true});});
+  await page.locator("#delivery-verified").check();await page.locator("#promote-confirm").check();
+  await page.evaluate(()=>{window.sessionStorage.setItem("flagpilot-gh-token","fake");});
+  await page.reload();await page.getByText("Example checkout change").waitFor();
+  await page.locator("#delivery-verified").check();await page.locator("#promote-confirm").check();
+  await page.evaluate(()=>{const input=document.querySelector("#review-run-id");input.value="12345";});
+  await page.evaluate(()=>{const original=window.fetch;window.fetch=async (url,opts)=>{if(String(url).includes("reports/latest.json")){const response=await original(url,opts);const data=await response.json();data.instrumentationEvidence.status="event_literal_only";return new Response(JSON.stringify(data),{headers:{"content-type":"application/json"}});}return original(url,opts);};});
+  await page.reload();
+  await page.locator("#delivery-verified").check();await page.locator("#promote-confirm").check();
+  await page.locator("#promote-form button").click();
+  await page.getByText(/Not eligible:/).waitFor();
+  assert.equal(dispatchCount,0);
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
