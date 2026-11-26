@@ -83,6 +83,12 @@ Native Flagsmith Experimentation is currently documented as beta/Enterprise beta
 
 The `flagsmith-create` environment protects environment creation, read-only preflight and resource provisioning. The `flagsmith-start` environment independently protects starting the experiment. The Gemini planning job has no Flagsmith credential. The Management API key is available only inside the protected environments and is never sent to Gemini or the browser demo.
 
+## PR-to-Experiment AI agent
+
+FlagPilot also provides a read-only code-review workflow. Submit a public GitHub pull-request URL through the operator console or run `.github/workflows/review-pull-request.yml`. The workflow fetches the PR title, description, changed-file list and textual diff, then asks Gemini to assess whether the code change is a meaningful experiment opportunity. It returns a validated hypothesis, safe control/treatment proposal, metric and trigger, instrumentation status, code locations limited to changed files, risks, human approval questions and a JSON evidence artifact (`flagpilot-pr-review`).
+
+This is deliberately analysis-only: it does not commit code, modify the pull request, create Flagsmith resources or start an experiment. The existing separately approved provisioning and start workflows remain responsible for Flagsmith writes. The PR-review workflow must first be present on the default branch before GitHub enables manual `workflow_dispatch` from the console.
+
 ## FlagPilot operator console
 
 The GitHub Pages site is the FlagPilot operator console. It provides the natural-language request form, proposal/resource summary, workflow timeline, evidence links and navigation to the Flagsmith SDK demo. To submit a new request from the page, connect a fine-grained GitHub personal access token restricted to this repository with **Actions: read and write** permission. The token is kept in the browser tab's session storage and is sent only to `api.github.com`; it is never sent to FlagPilot or Flagsmith servers. The Flagsmith organisation Management API key remains a protected GitHub Environment secret.
