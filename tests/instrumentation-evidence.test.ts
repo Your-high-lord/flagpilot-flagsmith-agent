@@ -65,3 +65,53 @@ test("partial source scan remains incomplete",()=>{
  assert.equal(result.status,"incomplete");
 });
 test("rejects invalid source commit SHAs",()=>assert.throws(()=>scanInstrumentationEvidence({eventName:"CheckoutStarted",sourceSha:"main",files:{"src/a.ts":"x"}}),/40-character Git commit SHA/));
+
+test("rejects a mutable let alias even when initially assigned from Flagsmith",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; let client=flagsmith; client.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects a mutable alias reassigned to an unrelated service",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; let client=flagsmith; client=otherService; client.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects reassignment of a const alias through semantic diagnostics",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; const client=flagsmith; client=otherService; client.trackEvent("CheckoutStarted");');
+ assert.equal(r.status,"incomplete");assert.equal(r.trackingCallFound,false);
+});
+test("rejects a type-only default Flagsmith import",()=>{
+ const r=scan('import type flagsmith from "@flagsmith/flagsmith"; flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects a type-only named factory import",()=>{
+ const r=scan('import { type createFlagsmithInstance } from "@flagsmith/flagsmith"; const client=createFlagsmithInstance(); client.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects a type-only namespace import",()=>{
+ const r=scan('import type * as sdk from "@flagsmith/flagsmith"; sdk.default.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects direct replacement of the SDK trackEvent method",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; flagsmith.trackEvent=otherService.trackEvent; flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+ assert.match(r.note,/mutation|replacement/i);
+});
+test("rejects computed replacement of the SDK trackEvent method",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; flagsmith["trackEvent"]=otherService.trackEvent; flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects deletion of the SDK trackEvent method",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; delete flagsmith.trackEvent; flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects Object.defineProperty replacement of trackEvent",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; Object.defineProperty(flagsmith,"trackEvent",{value:otherService.sendEvent}); flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects Object.assign replacement of trackEvent",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; Object.assign(flagsmith,{trackEvent:otherService.sendEvent}); flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("semantic diagnostics make source evidence incomplete",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; const broken: MissingType = 1; flagsmith.trackEvent("CheckoutStarted");');
+ assert.equal(r.status,"incomplete");assert.equal(r.trackingCallFound,false);
+});
