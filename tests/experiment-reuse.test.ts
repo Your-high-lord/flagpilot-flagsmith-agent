@@ -20,3 +20,6 @@ test("rejects paused, running or completed experiments",()=>{for(const status of
 test("rejects missing rollout read-back",()=>{const e=actual();delete (e as Record<string,unknown>).experiment_rollout;assert.throws(()=>verify(e),/stored rollout configuration/);});
 test("rejects missing metric attachments",()=>{const e=actual();delete (e as Record<string,unknown>).metrics;assert.throws(()=>verify(e),/metric attachments/);});
 test("rejects missing audience data rather than assuming all users",()=>{const e=actual();delete (e.experiment_rollout as Record<string,unknown>).audience;assert.throws(()=>verify(e),/audience configuration/);});
+
+test("rejects a different audience match mode even when no segments are attached",()=>{const e=actual();((e.experiment_rollout as Record<string,unknown>).audience as Record<string,unknown>).match="all";assert.throws(()=>verify(e),/all-identities audience/);});
+test("rejects a metric whose inherent direction is not upward",()=>{const e=actual();(e.metrics as Array<Record<string,unknown>>)[0]!.direction="down";assert.throws(()=>verify(e),/metric ID, name, aggregation, direction/);});
