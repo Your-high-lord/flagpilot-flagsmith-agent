@@ -46,7 +46,7 @@ export function parsePullRequestUrl(input:string):PullRequestTarget {
 }
 export function validatePrReview(value:unknown,changedFiles:string[]):PrReview {
   if(!record(value))throw new Error("Gemini PR review must be a JSON object.");
-  const allowed=["verdict","changeSummary","experimentOpportunity","hypothesis","flag","variants","metric","codeTargets","risks","approvalQuestions","manualStepsSaved","nextStep"];
+  const allowed=["verdict","changeSummary","experimentOpportunity","hypothesis","flag","variants","metric","codeTargets","risks","approvalQuestions","manualStepsSaved","nextStep","instrumentationPlan","implementationPlan"];
   const extra=Object.keys(value).filter(k=>!allowed.includes(k));if(extra.length)throw new Error(`Unexpected PR review fields: ${extra.join(", ")}.`);
   const verdict=value.verdict;if(!["ready_for_experiment","needs_engineering_work","not_a_good_experiment"].includes(String(verdict)))throw new Error("PR review verdict is invalid.");
   if(!record(value.flag))throw new Error("PR review flag is missing.");
