@@ -111,7 +111,9 @@ export function scanInstrumentationEvidence(input:{
     '  export default flagsmith;',
     '  export function createFlagsmithInstance(): FlagsmithClient;',
     '}',
-    'declare module "*";'
+    'declare module "*";',
+    'declare var window: { flagsmith: FlagsmithClient };',
+    'declare var globalThis: { flagsmith: FlagsmithClient };'
   ].join("\n");
   const options:ts.CompilerOptions={
     target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,
@@ -188,7 +190,8 @@ export function scanInstrumentationEvidence(input:{
       const declarations=symbol.declarations??[];
       return declarations.length>0&&declarations.every(declaration=>
         declaration.getSourceFile().isDeclarationFile&&
-        /(?:^|[\\/])lib\.(?:dom|es20\d\d|esnext).*\.d\.ts$/i.test(declaration.getSourceFile().fileName));
+        (declaration.getSourceFile().fileName===shimPath||
+          /(?:^|[\\/])lib\\.(?:dom|es20\\d\\d|esnext).*\\.d\\.ts$/i.test(declaration.getSourceFile().fileName)));
     };
     const sdkOfClient=(node:ts.Expression,seen=new Set<ts.Symbol>()):InstrumentationSourceMatch["sdk"]|undefined=>{
       node=unwrap(node);
