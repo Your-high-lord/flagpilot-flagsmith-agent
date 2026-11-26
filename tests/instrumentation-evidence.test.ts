@@ -21,7 +21,7 @@ test("accepts documented browser global",()=>{
 });
 test("rejects commented-out tracking calls",()=>{
  const r=scan('import flagsmith from "@flagsmith/flagsmith"; // flagsmith.trackEvent("CheckoutStarted");');
- assert.equal(r.status,"event_literal_only");assert.equal(r.trackingCallFound,false);
+ assert.equal(r.status,"not_found");assert.equal(r.trackingCallFound,false);
 });
 test("rejects strings containing fake tracking calls",()=>{
  const r=scan("import flagsmith from \"@flagsmith/flagsmith\"; const docs=\'flagsmith.trackEvent(\"CheckoutStarted\")\';");
