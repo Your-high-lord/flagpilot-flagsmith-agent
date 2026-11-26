@@ -25,7 +25,7 @@ export async function provisionExperiment(api:FlagsmithApi,p:ExperimentProposal)
    name:p.featureName,
    type:"MULTIVARIATE",
    initial_value:"control",
-   default_enabled:true,
+   default_enabled:false,
    description:`FlagPilot experiment: ${p.experimentName}`
   });
   if(!isRecord(raw))throw new Error("Flagsmith did not return the created multivariate feature.");
@@ -36,13 +36,13 @@ export async function provisionExperiment(api:FlagsmithApi,p:ExperimentProposal)
  }
  if(projectFeature.type!=="MULTIVARIATE")throw new Error("Feature read-back is not MULTIVARIATE; experiment creation would be rejected.");
  if(projectFeature.initial_value!=="control")throw new Error("Feature initial value is not exactly 'control'; no overwrite attempted.");
- if(projectFeature.default_enabled!==true)throw new Error("Feature is not enabled by default; no silent update attempted.");
+ if(projectFeature.default_enabled!==false)throw new Error("Feature must be disabled by default at project scope so the experiment cannot unintentionally expose the flag in other environments.");
 
  let detail=parseCliJson(await runFlagsmith(["feature","get",p.featureName,...ctx]));
  let variant=findVariant(detail,p.treatment.key),variantReused=Boolean(variant);
  if(variant){
   if(String(variant.value)!==p.treatment.value)throw new Error("Existing treatment key has a different value.");
-  if(variant.weight!==undefined&&Number(variant.weight)!==0)throw new Error("Existing treatment key has non-zero default weight.");
+  const defaultAllocation=variant.default_percentage_allocation??variant.weight;if(defaultAllocation===undefined||Number(defaultAllocation)!==0)throw new Error("Existing treatment key must have a verified zero default allocation; refusing reuse.");
  }else{
   const raw=await api.createFeatureVariant(projectId,featureId,{
    feature:featureId,
