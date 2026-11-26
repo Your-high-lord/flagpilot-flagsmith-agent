@@ -66,3 +66,5 @@ test("refuses missing deterministic source-call evidence",()=>assert.throws(()=>
 test("refuses source evidence scanned at another commit",()=>assert.throws(()=>prepareProposalFromReview(report(),{...options,sourceEvidence:{...sourceEvidence,sourceSha:"c".repeat(40)}}),/deterministic source evidence/));
 test("refuses source evidence for a different event",()=>assert.throws(()=>prepareProposalFromReview(report(),{...options,sourceEvidence:{...sourceEvidence,eventName:"page_view"}}),/deterministic source evidence/));
 test("refuses incomplete source scans",()=>assert.throws(()=>prepareProposalFromReview(report(),{...options,sourceEvidence:{...sourceEvidence,failedFiles:["src/other.ts"]}}),/deterministic source evidence/));
+
+test("refuses instrumentation found outside the AI-identified code target",()=>assert.throws(()=>prepareProposalFromReview(report(),{...options,sourceEvidence:{...sourceEvidence,matches:[{...sourceEvidence.matches[0]!,file:"src/other.ts"}]}}),/not found in a code location identified/));
