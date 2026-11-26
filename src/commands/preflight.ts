@@ -1,0 +1,5 @@
+import {appendFile} from "node:fs/promises";import {FlagsmithApi} from "../flagsmith/api.js";import {runPreflight} from "../flagsmith/preflight.js";
+const apiKey=process.env.FLAGSMITH_API_KEY,environmentKey=process.env.FLAGSMITH_ENVIRONMENT_KEY;if(!apiKey||!environmentKey)throw new Error("Set FLAGSMITH_API_KEY and FLAGSMITH_ENVIRONMENT_KEY first.");
+const api=new FlagsmithApi({apiKey,environmentKey,...(process.env.FLAGSMITH_API_URL?{apiUrl:process.env.FLAGSMITH_API_URL}:{})});const r=await runPreflight(api);
+const summary=["## FlagPilot · Flagsmith preflight",`- **Warehouse:** ${r.warehouseStatus}`,`- **Metrics readable:** ${r.metricsReadable?"YES":"NO"}`,`- **Experiments readable:** ${r.experimentsReadable?"YES":"NO"}`,`- **Ready:** ${r.warehouseConnected?"YES":"NO"}`,`- **Result:** ${r.note}`,...r.diagnostics.map(x=>`- ${x}`),""] .join("\n");
+console.log(summary);if(process.env.GITHUB_STEP_SUMMARY)await appendFile(process.env.GITHUB_STEP_SUMMARY,summary);if(!r.warehouseConnected)throw new Error(r.note);
