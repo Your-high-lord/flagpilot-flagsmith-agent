@@ -1,0 +1,7 @@
+import test from "node:test";import assert from "node:assert/strict";import {asList} from "../src/flagsmith/api.js";import {runPreflight} from "../src/flagsmith/preflight.js";
+test("response helper accepts arrays",()=>assert.equal(asList([{id:1},{id:2}]).length,2));
+test("response helper accepts paginated results",()=>assert.equal(asList({count:2,results:[{id:1},{id:2}]}).length,2));
+test("response helper fails closed on unknown shape",()=>assert.deepEqual(asList({unexpected:[{id:1}]}),[]));
+test("preflight passes only when warehouse and experiment endpoints are ready",async()=>{const r=await runPreflight({warehouseConnections:async()=>[{status:"Connected"}],experimentMetrics:async()=>[],experiments:async()=>[]});assert.equal(r.warehouseConnected,true);assert.equal(r.metricsReadable,true);assert.equal(r.experimentsReadable,true);});
+test("preflight blocks Pending Connection",async()=>{const r=await runPreflight({warehouseConnections:async()=>[{status:"Pending Connection"}],experimentMetrics:async()=>[],experiments:async()=>[]});assert.equal(r.warehouseConnected,false);assert.match(r.note,/not Connected/i);});
+test("preflight blocks unavailable experimentation endpoint",async()=>{const r=await runPreflight({warehouseConnections:async()=>[{status:"Connected"}],experimentMetrics:async()=>{throw new Error("403 Forbidden");},experiments:async()=>[]});assert.equal(r.warehouseConnected,false);assert.equal(r.metricsReadable,false);assert.match(r.note,/unblock Experimentation access/i);});
