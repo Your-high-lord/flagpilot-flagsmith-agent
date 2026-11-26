@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101827">
+  <title>FlagPilot · Warehouse Event Check</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js" integrity="sha384-MqtZafl7JG1sX3PWTMcsks/3Mhp9QDc8TuZRyU0/fsk6YGj542Y7Fb49eFYZ7NYT" crossorigin="anonymous"></script>
+  <script src="warehouse-check.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="brand-mark">F</span><span>FlagPilot</span></a>
+  <span class="topbar-note"><span class="pulse"></span> WAREHOUSE DIAGNOSTIC</span>
+</header>
+<main class="shell" style="max-width:760px">
+  <section class="hero">
+    <div class="eyebrow">FLAGS MITH · SDK EVENT SMOKE TEST</div>
+    <h1>Send a real SDK event.<br><span>Verify the pipeline.</span></h1>
+    <p>This diagnostic sends three clearly labelled synthetic events from one temporary test identity to the selected Flagsmith environment. It does not create or change feature flags, metrics or experiments.</p>
+  </section>
+  <section class="panel" style="padding:26px">
+    <div class="panel-heading">
+      <div><span class="eyebrow">PUBLIC SDK CONNECTION</span><h3>FlagPilot Development</h3></div>
+      <span id="warehouse-status" class="status status-off">NOT SENT</span>
+    </div>
+    <form id="warehouse-form" class="form">
+      <label>Client-side Environment Key
+        <input id="warehouse-key" type="password" autocomplete="off" placeholder="Paste the client-side key from FlagPilot Development → SDK Keys" required>
+      </label>
+      <p class="hint">Use only the public client-side Environment Key. Never enter the Organisation Management API key or a server-side SDK key.</p>
+      <button id="send-events" class="button button-primary" type="submit">Send 3 synthetic SDK events</button>
+    </form>
+    <div id="warehouse-error" class="error-message" role="alert"></div>
+    <div id="warehouse-result" class="success-message" role="status" aria-live="polite" style="margin-top:16px"></div>
+    <div class="result-panel" style="margin-top:22px">
+      <div class="eyebrow">WHAT THIS TEST DOES</div>
+      <div class="result-row"><span>SDK event pipeline</span><strong>enableEvents: true</strong></div>
+      <div class="result-row"><span>Identity</span><strong>One temporary synthetic identity</strong></div>
+      <div class="result-row"><span>Events</span><strong>3 prefixed smoke-test events</strong></div>
+      <div class="result-row"><span>Flush</span><strong>flushEvents()</strong></div>
+    </div>
+  </section>
+  <section class="footnote"><span class="dot"></span><span>These are synthetic diagnostic events, not customer conversions or experiment results. After sending, return to Environment Settings → Warehouse and refresh the page. Ingestion and status updates may take time.</span></section>
+  <footer><span>FLAGPILOT · TOGGLE WARS 2026</span><span><a href="index.html">Back to demo</a></span></footer>
+</main>
+</body>
+</html>
