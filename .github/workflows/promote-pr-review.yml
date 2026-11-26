@@ -1,0 +1,122 @@
+name: FlagPilot · Promote approved PR review to experiment
+on:
+  workflow_dispatch:
+    inputs:
+      review_run_id:
+        description: Successful FlagPilot PR review run ID
+        required: true
+        type: string
+      rollout_percentage:
+        description: Percentage of eligible Development traffic
+        required: true
+        default: "10"
+        type: string
+      timeframe_days:
+        description: Experiment measurement window in days
+        required: true
+        default: "7"
+        type: string
+      confirm_provision:
+        description: Confirm that you reviewed the PR report and want to create a draft experiment
+        required: true
+        default: false
+        type: boolean
+permissions:
+  actions: read
+  contents: read
+concurrency:
+  group: flagpilot-pr-promotion-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  prepare:
+    name: Verify review and prepare experiment proposal
+    if: ${{ inputs.confirm_provision == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Verify source review run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEW_RUN_ID: ${{ inputs.review_run_id }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$REVIEW_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Review run ID must be a positive integer."
+            exit 1
+          fi
+          RUN="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$REVIEW_RUN_ID")"
+          test "$(jq -r '.path' <<<"$RUN")" = ".github/workflows/review-pull-request.yml"
+          test "$(jq -r '.status' <<<"$RUN")" = "completed"
+          test "$(jq -r '.conclusion' <<<"$RUN")" = "success"
+          test "$(jq -r '.head_branch' <<<"$RUN")" = "main"
+          echo "Verified successful FlagPilot PR review run #$REVIEW_RUN_ID."
+      - name: Download source review artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: flagpilot-pr-review
+          path: artifacts/source-review
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.review_run_id }}
+          github-token: ${{ github.token }}
+      - name: Convert eligible review to validated proposal
+        env:
+          REVIEW_RUN_ID: ${{ inputs.review_run_id }}
+          ROLLOUT_PERCENTAGE: ${{ inputs.rollout_percentage }}
+          TIMEFRAME_DAYS: ${{ inputs.timeframe_days }}
+          CONFIRM_PROVISION: ${{ inputs.confirm_provision }}
+        run: npm run prepare:pr-proposal
+      - name: Upload validated proposal
+        uses: actions/upload-artifact@v4
+        with:
+          name: flagpilot-pr-derived-plan
+          path: artifacts/plan.json
+          if-no-files-found: error
+          retention-days: 3
+  provision:
+    name: Create Flagsmith draft after human approval
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    environment:
+      name: flagsmith-create
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Read-only Flagsmith preflight
+        env:
+          FLAGSMITH_API_KEY: ${{ secrets.FLAGSMITH_API_KEY }}
+          FLAGSMITH_API_URL: https://api.flagsmith.com
+          FLAGSMITH_ENVIRONMENT_KEY: ${{ vars.FLAGSMITH_ENVIRONMENT_KEY }}
+        run: npm run preflight
+      - name: Install Flagsmith CLI v2
+        uses: Flagsmith/setup-cli@c7154aaa37dff8aca0b66afc1e6722e7ad00c115 # v1.0.0
+        with:
+          cli-version: v2.0.0
+      - name: Download validated proposal
+        uses: actions/download-artifact@v4
+        with:
+          name: flagpilot-pr-derived-plan
+          path: artifacts
+      - name: Provision real Flagsmith resources
+        env:
+          FLAGSMITH_API_KEY: ${{ secrets.FLAGSMITH_API_KEY }}
+          FLAGSMITH_API_URL: https://api.flagsmith.com
+          FLAGSMITH_ORGANISATION: ${{ vars.FLAGSMITH_ORGANISATION }}
+          FLAGSMITH_PROJECT: ${{ vars.FLAGSMITH_PROJECT }}
+          FLAGSMITH_PROJECT_ID: ${{ vars.FLAGSMITH_PROJECT_ID }}
+          FLAGSMITH_ENVIRONMENT_KEY: ${{ vars.FLAGSMITH_ENVIRONMENT_KEY }}
+          FLAGSMITH_ENVIRONMENT: ${{ vars.FLAGSMITH_ENVIRONMENT_KEY }}
+        run: npm run provision
+      - name: Upload provisioning evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: flagpilot-pr-provision-result
+          path: artifacts/provision-result.json
+          if-no-files-found: error
+          retention-days: 7
