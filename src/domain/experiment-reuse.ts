@@ -33,10 +33,10 @@ export function verifyExistingExperimentConfiguration(input:{
  const allocations=rollout.multivariate_feature_state_values.filter(isRecord);
  if(allocations.length!==1||Number(allocations[0]!.multivariate_feature_option)!==treatmentOptionId||!equalNumber(allocations[0]!.percentage_allocation,p.treatment.allocation))throw new Error("Existing experiment treatment allocation differs from the approved proposal.");
  const audience=requiredRecord(rollout.audience,"audience configuration");
- if(!Array.isArray(audience.segments)||audience.segments.length!==0)throw new Error("Existing experiment audience is not the approved all-identities audience.");
+ if(audience.match!=="any"||!Array.isArray(audience.segments)||audience.segments.length!==0)throw new Error("Existing experiment audience is not the approved all-identities audience.");
  if(!Array.isArray(e.metrics))throw new Error("Existing experiment has no readable metric attachments.");
  const metrics=e.metrics.filter(isRecord);
  if(metrics.length!==1)throw new Error("Existing experiment must have exactly one primary metric.");
  const metric=metrics[0]!;
- if(Number(metric.metric)!==metricId||metric.metric_name!==p.metric.name||metric.expected_direction!=="increase"||metric.aggregation!=="occurrence")throw new Error("Existing experiment metric ID, name, aggregation or expected direction differs from the approved proposal.");
+ if(Number(metric.metric)!==metricId||metric.metric_name!==p.metric.name||metric.expected_direction!=="increase"||metric.direction!=="up"||metric.aggregation!=="occurrence")throw new Error("Existing experiment metric ID, name, aggregation, direction or expected direction differs from the approved proposal.");
 }
