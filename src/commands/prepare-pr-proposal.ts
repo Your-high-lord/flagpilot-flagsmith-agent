@@ -16,7 +16,7 @@ const pr=record.pullRequest as Record<string,unknown>|undefined;
 if(!pr||typeof pr.url!=="string"||typeof pr.headSha!=="string"||typeof pr.baseSha!=="string")throw new Error("The PR review is missing immutable source commit metadata.");
 const target=new URL(pr.url);
 const match=target.pathname.match(/^\\/([A-Za-z0-9_.-]+)\\/([A-Za-z0-9_.-]+)\\/pull\\/([1-9][0-9]*)\\/?$/);
-if(target.hostname!=="github.com"||!match||`${match[1]}/${match[2]}`.toLowerCase()!==repository.toLowerCase())throw new Error("The source PR must belong to this FlagPilot repository's configured owner/repository context only when the promotion workflow is used for an owned repository.");
+if(target.hostname!=="github.com"||!match)throw new Error("The source PR URL is not a valid public GitHub pull request.");
 const apiBase=`https://api.github.com/repos/${match[1]}/${match[2]}/pulls/${match[3]}`;
 const response=await fetch(apiBase,{headers:{Accept:"application/vnd.github+json","User-Agent":"FlagPilot-PR-Experiment-Agent","X-GitHub-Api-Version":"2022-11-28",Authorization:`Bearer ${required("GITHUB_TOKEN")}`},signal:AbortSignal.timeout(20000)});
 if(!response.ok)throw new Error(`Could not recheck the source pull request (HTTP ${response.status}).`);
