@@ -4,7 +4,7 @@ import {scanInstrumentationEvidence} from "../src/domain/instrumentation-evidenc
 const sha="a".repeat(40);
 test("finds an exact event passed to a tracking call",()=>{
   const result=scanInstrumentationEvidence({eventName:"checkout_started",sourceSha:sha,files:{"src/checkout.ts":"flagsmith.trackEvent('checkout_started');"}});
-  assert.equal(result.status,"verified_call_found");
+  assert.equal(result.status,"tracking_call_found");
   assert.equal(result.matches[0]?.api,"trackevent");
   assert.equal(result.matches[0]?.line,1);
 });
