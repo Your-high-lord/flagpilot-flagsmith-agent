@@ -29,7 +29,7 @@ const diffTruncated=rawDiff.length>36000;
 const missingPatch=fileRows.some(x=>typeof x.patch!=="string");
 const truncated=diffTruncated||missingPatch||fileRows.length!==(pr.changed_files??fileRows.length);
 const diff=diffTruncated?rawDiff.slice(0,36000)+"\n[DIFF TRUNCATED: review only the supplied portion.]":rawDiff;
-const sourceExtensions=/\\.(?:[cm]?[jt]sx?|py|go|rs|java|kt|swift|rb|php|cs|fs|vue|svelte)$/i;
+const sourceExtensions=/\.(?:[cm]?[jt]sx?|py|go|rs|java|kt|swift|rb|php|cs|fs|vue|svelte)$/i;
 const sourceFiles=fileRows.filter(x=>typeof x.filename==="string"&&sourceExtensions.test(x.filename));
 const sourceContents:Record<string,string>={};
 const failedSourceFiles:string[]=[];
