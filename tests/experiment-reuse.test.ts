@@ -23,3 +23,6 @@ test("rejects missing audience data rather than assuming all users",()=>{const e
 
 test("rejects a different audience match mode even when no segments are attached",()=>{const e=actual();((e.experiment_rollout as Record<string,unknown>).audience as Record<string,unknown>).match="all";assert.throws(()=>verify(e),/all-identities audience/);});
 test("rejects a metric whose inherent direction is not upward",()=>{const e=actual();(e.metrics as Array<Record<string,unknown>>)[0]!.direction="down";assert.throws(()=>verify(e),/metric ID, name, aggregation, direction/);});
+
+test("start verification can explicitly allow only untouched draft statuses",()=>{const e=actual();assert.doesNotThrow(()=>verifyExistingExperimentConfiguration({experiment:e,proposal,featureId:10,treatmentOptionId:20,metricId:30,allowedStatuses:["created","draft"]}));});
+test("start verification still rejects running status even when only drafts are allowed",()=>{const e=actual();e.status="running";assert.throws(()=>verifyExistingExperimentConfiguration({experiment:e,proposal,featureId:10,treatmentOptionId:20,metricId:30,allowedStatuses:["created","draft"]}),/status is not allowed/);});
