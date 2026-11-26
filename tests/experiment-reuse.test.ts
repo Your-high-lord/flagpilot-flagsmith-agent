@@ -17,6 +17,6 @@ test("rejects extra metrics",()=>{const e=actual();(e.metrics as unknown[]).push
 test("rejects a segmented audience",()=>{const e=actual();((e.experiment_rollout as Record<string,unknown>).audience as Record<string,unknown>).segments=[{id:1}];assert.throws(()=>verify(e),/all-identities audience/);});
 test("rejects disabled rollout",()=>{const e=actual();(e.experiment_rollout as Record<string,unknown>).enabled=false;assert.throws(()=>verify(e),/rollout is disabled/);});
 test("rejects paused, running or completed experiments",()=>{for(const status of ["paused","running","completed"]){const e=actual();e.status=status;assert.throws(()=>verify(e),/untouched draft/);}});
-test("rejects missing rollout read-back",()=>{const e=actual();delete e.experiment_rollout;assert.throws(()=>verify(e),/stored rollout configuration/);});
-test("rejects missing metric attachments",()=>{const e=actual();delete e.metrics;assert.throws(()=>verify(e),/metric attachments/);});
+test("rejects missing rollout read-back",()=>{const e=actual();delete (e as Record<string,unknown>).experiment_rollout;assert.throws(()=>verify(e),/stored rollout configuration/);});
+test("rejects missing metric attachments",()=>{const e=actual();delete (e as Record<string,unknown>).metrics;assert.throws(()=>verify(e),/metric attachments/);});
 test("rejects missing audience data rather than assuming all users",()=>{const e=actual();delete (e.experiment_rollout as Record<string,unknown>).audience;assert.throws(()=>verify(e),/audience configuration/);});
