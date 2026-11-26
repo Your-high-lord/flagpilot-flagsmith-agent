@@ -56,7 +56,7 @@ jobs:
           {
             echo '## Next manual setup step'
             echo 'Flagsmith environment creation succeeded. GitHub blocks the workflow GITHUB_TOKEN from writing Actions variables, so set these under Settings → Secrets and variables → Actions → Variables:'
-            echo '- FLAGSMITH_ORGANISATION = Asir'''s Org
+            echo "- FLAGSMITH_ORGANISATION = Asir's Org"
             echo '- FLAGSMITH_PROJECT = My first project'
             echo '- FLAGSMITH_PROJECT_ID = value shown above'
             echo '- FLAGSMITH_ENVIRONMENT_KEY = client-side environment key from this run output (public SDK key)'
