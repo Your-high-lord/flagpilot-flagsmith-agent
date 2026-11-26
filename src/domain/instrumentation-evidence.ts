@@ -189,7 +189,7 @@ export function scanInstrumentationEvidence(input:{
       return declarations.length>0&&declarations.every(declaration=>
         declaration.getSourceFile().isDeclarationFile&&
         (declaration.getSourceFile().fileName===shimPath||
-          /(?:^|[\\/])lib\\.(?:dom|es20\\d\\d|esnext).*\\.d\\.ts$/i.test(declaration.getSourceFile().fileName)));
+          /(?:^|[\\/])lib\.(?:dom|es20\d\d|esnext).*\.d\.ts$/i.test(declaration.getSourceFile().fileName)));
     };
     const sdkOfClient=(node:ts.Expression,seen=new Set<ts.Symbol>()):InstrumentationSourceMatch["sdk"]|undefined=>{
       node=unwrap(node);
