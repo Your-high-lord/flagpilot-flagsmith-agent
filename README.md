@@ -44,7 +44,7 @@ In **Settings → Secrets and variables → Actions → New repository secret**,
 |---|---|
 | `GEMINI_API_KEY` | Gemini Developer API key used only by the planning job. |
 
-Create a Gemini key at [Google AI Studio](https://aistudio.google.com/apikey). The default model is `gemini-3.8-flash`; it can be changed with the repository variable `GEMINI_MODEL`.
+Create a Gemini key at [Google AI Studio](https://aistudio.google.com/apikey). The primary model defaults to `gemini-3.8-flash` and falls back to `gemini-3.5-flash-lite` if the primary returns a sustained HTTP 503. Both can be changed with repository variables `GEMINI_MODEL` and `GEMINI_FALLBACK_MODEL`.
 
 Create the Flagsmith organisation API key in **Flagsmith → Organisation settings → API Access → Create API Key**. Treat it as a privileged secret. Do not paste it into this repository or into a chat.
 
