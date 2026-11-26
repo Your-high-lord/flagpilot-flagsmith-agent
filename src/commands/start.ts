@@ -1,3 +1,60 @@
-import {appendFile} from "node:fs/promises";import {FlagsmithApi} from "../flagsmith/api.js";import {startExperiment} from "../flagsmith/start.js";
-const apiKey=process.env.FLAGSMITH_API_KEY,environmentKey=process.env.FLAGSMITH_ENVIRONMENT_KEY,id=Number(process.env.EXPERIMENT_ID);if(!apiKey||!environmentKey)throw new Error("Missing Flagsmith management secret or environment key.");if(!Number.isSafeInteger(id)||id<=0)throw new Error("EXPERIMENT_ID must be a positive integer.");
-const api=new FlagsmithApi({apiKey,environmentKey,...(process.env.FLAGSMITH_API_URL?{apiUrl:process.env.FLAGSMITH_API_URL}:{})});const r=await startExperiment(api,id);const summary=["## FlagPilot · Experiment start verification",`- **Experiment ID:** ${r.id}`,`- **Status:** ${r.status}`,`- **Already running:** ${r.alreadyRunning?"yes":"no"}`,""].join("\n");console.log(summary);if(process.env.GITHUB_STEP_SUMMARY)await appendFile(process.env.GITHUB_STEP_SUMMARY,summary);
+import {appendFile,readFile} from "node:fs/promises";
+import {FlagsmithApi,isRecord} from "../flagsmith/api.js";
+import {startExperiment} from "../flagsmith/start.js";
+import {verifyExistingExperimentConfiguration} from "../domain/experiment-reuse.js";
+import {validateProvisioningArtifact} from "../domain/provisioning-artifact.js";
+
+function required(name:string):string {
+  const value=process.env[name]?.trim();
+  if(!value)throw new Error(name+" is required.");
+  return value;
+}
+function positiveInteger(name:string):number {
+  const raw=required(name);
+  if(!/^[1-9][0-9]*$/.test(raw))throw new Error(name+" must be a positive integer.");
+  const value=Number(raw);
+  if(!Number.isSafeInteger(value))throw new Error(name+" is outside the safe integer range.");
+  return value;
+}
+const apiKey=required("FLAGSMITH_API_KEY");
+const environmentKey=required("FLAGSMITH_ENVIRONMENT_KEY");
+const projectId=positiveInteger("FLAGSMITH_PROJECT_ID");
+const id=positiveInteger("EXPERIMENT_ID");
+const artifactPath=required("PROVISION_RESULT_PATH");
+const raw=JSON.parse(await readFile(artifactPath,"utf8")) as unknown;
+const artifact=validateProvisioningArtifact(raw,{projectId,environmentKey,experimentId:id});
+const api=new FlagsmithApi({apiKey,environmentKey,...(process.env.FLAGSMITH_API_URL?{apiUrl:process.env.FLAGSMITH_API_URL}:{})});
+
+// Verify the project-level feature remains disabled outside the selected experiment rollout.
+const feature=await api.getProjectFeature(projectId,artifact.result.feature.id);
+if(!isRecord(feature)||feature.type!=="MULTIVARIATE"||feature.initial_value!=="control"||feature.default_enabled!==false) {
+  throw new Error("The provisioned feature no longer matches its safe project-level defaults. Refusing to start.");
+}
+
+// Re-read the live experiment after the flagsmith-start approval and compare every
+// material configuration field with the immutable successful provisioning artifact.
+const experiment=await api.getExperiment(id);
+if(!isRecord(experiment))throw new Error("Flagsmith did not return the selected experiment.");
+verifyExistingExperimentConfiguration({
+  experiment,
+  proposal:artifact.proposal,
+  featureId:artifact.result.feature.id,
+  treatmentOptionId:artifact.result.treatment.id,
+  metricId:artifact.result.metric.id,
+  allowedStatuses:["created","draft"]
+});
+const result=await startExperiment(api,id);
+const summary=[
+  "## FlagPilot · Verified experiment start",
+  "- **Provisioning run:** "+required("PROVISION_RUN_ID"),
+  "- **Experiment ID:** "+result.id,
+  "- **Experiment name:** "+artifact.result.experiment.name,
+  "- **Flagsmith project:** "+projectId,
+  "- **Environment:** verified against provisioning artifact",
+  "- **Status:** "+result.status,
+  "- **Already running:** "+(result.alreadyRunning?"yes":"no"),
+  "",
+  "> The experiment was matched to its successful provisioning artifact and its live Flagsmith configuration was checked after the protected start approval."
+].join("\n");
+console.log(summary);
+if(process.env.GITHUB_STEP_SUMMARY)await appendFile(process.env.GITHUB_STEP_SUMMARY,summary+"\n");
