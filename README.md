@@ -107,7 +107,7 @@ CI checks dashboard JavaScript syntax, runs a Playwright Chromium smoke test aga
 
 ## FlagPilot operator console
 
-The GitHub Pages site is the FlagPilot operator console. It provides the natural-language request form, proposal/resource summary, workflow timeline, evidence links and navigation to the Flagsmith SDK demo. To submit a new request from the page, connect a fine-grained GitHub personal access token restricted to this repository with **Actions: read and write** permission. The token is kept in the browser tab's session storage and is sent only to `api.github.com`; it is never sent to FlagPilot or Flagsmith servers. The Flagsmith organisation Management API key remains a protected GitHub Environment secret.
+The GitHub Pages site is the FlagPilot operator console. It provides the natural-language request form, proposal/resource summary, workflow timeline, evidence links and navigation to the Flagsmith SDK demo. Resource cards from provisioning run #2 are explicitly historical snapshots, not live Flagsmith queries. Integration badges describe configured workflows and do not claim current service health. Current GitHub workflow activity is refreshed from the Actions API. To submit a new request from the page, connect a fine-grained GitHub personal access token restricted to this repository with **Actions: read and write** permission. The token is kept in the browser tab's session storage and is sent only to `api.github.com`; it is never sent to FlagPilot or Flagsmith servers. The Flagsmith organisation Management API key remains a protected GitHub Environment secret.
 
 GitHub Environment approvals still happen on GitHub's protected deployment review screen. The dashboard links to those workflows; it does not bypass or simulate approval. Live workflow status is read from the GitHub Actions API. The current experiment/resource summary is a verified snapshot and is not presented as a live Flagsmith API query.
 
@@ -140,9 +140,9 @@ Open the deployed demo. Enter:
 
 Connect, confirm that Flagsmith returns a variation and confirms experiment enrolment, generate another demo visitor and confirm identity stability, then click the demo conversion button. The page uses `getExperimentFlag`, `trackEvent` and `flushEvents`. No organisation Management API key belongs in the page.
 
-### D. Start the experiment (second approval)
+### D. Start the experiment (third gate, separate approval)
 
-Only after the demo and events have been smoke-tested, run **Actions → FlagPilot · Start experiment (second approval)**. Enter the numeric experiment ID and set `demo_verified` to `true`. Review and approve the protected `flagsmith-start` job. The workflow starts the experiment and checks that the returned status is `running`.
+Only after the demo and events have been smoke-tested, use the dashboard start form or run **Actions → FlagPilot · Start verified experiment (second approval)**. Supply both the successful provisioning workflow run ID and the experiment ID recorded in that run's artifact; set `demo_verified` to `true`. The workflow accepts only successful manual runs of the approved FlagPilot provisioning workflows on `main`, downloads the exact run's provisioning artifact, and checks that its experiment ID, feature, treatment, metric, project and environment match. Only then does it pause at the protected `flagsmith-start` environment. After that human approval, the start job downloads the verified artifact again, rechecks the project-level feature defaults and reads the live experiment back from Flagsmith. It compares the full draft configuration before issuing the start request and verifies the resulting running status. An arbitrary experiment ID, an old artifact without target metadata, a different environment, a changed configuration or a non-draft experiment is rejected.
 
 ## Testing
 
