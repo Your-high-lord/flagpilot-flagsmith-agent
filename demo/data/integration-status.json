@@ -1,0 +1,24 @@
+{
+  "updatedAt": "2026-11-26",
+  "organisation": "Asir's Org",
+  "project": "My first project",
+  "projectId": 55341,
+  "environment": "FlagPilot Development",
+  "flagsmith": {
+    "status": "connected",
+    "detail": "Management API preflight and resource read-back passed"
+  },
+  "warehouse": {
+    "status": "connected",
+    "detail": "Flagsmith managed warehouse was connected during the latest verified preflight"
+  },
+  "cli": {
+    "status": "installed",
+    "version": "2.0.0",
+    "detail": "CLI installed in the provisioning workflow; Management API performs resource writes"
+  },
+  "gemini": {
+    "status": "ready",
+    "detail": "Latest proposal succeeded using the configured fallback model"
+  }
+}
