@@ -12,10 +12,10 @@ const report={
  instrumentationEvidence:{status:"flagsmith_sdk_call_found",eventName:"checkout_completed",sourceSha:sha,scannedFiles:1,failedFiles:[],eventLiteralFound:true,trackingCallFound:true,matches:[{file:"src/checkout.ts",line:20,api:"trackEvent",sdk:"@flagsmith/flagsmith",receiver:"flagsmith"}],note:"Source match only."},
  createdAt:"2026-11-27T00:00:00.000Z",workflowRunUrl:"https://github.com/Your-high-lord/flagpilot-flagsmith-agent/actions/runs/12345"
 };
-async function fixtureServer(){
+async function fixtureServer(reportData=report){
  const server=createServer(async(req,res)=>{
   const path=new URL(req.url,"http://localhost").pathname;
-  if(path==="/reports/latest.json"){res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(report));return;}
+  if(path==="/reports/latest.json"){res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(reportData));return;}
   const file=path==="/"?"index.html":path.slice(1);
   try{const data=await readFile(resolve(root,file));const type=extname(file)===".js"?"text/javascript":extname(file)===".css"?"text/css":"text/html";res.writeHead(200,{"content-type":type});res.end(data);}catch{res.writeHead(404);res.end("not found");}
  });
@@ -59,20 +59,19 @@ test("dashboard submits a fully eligible authenticated promotion with explicit c
   assert.equal(dispatchBody?.inputs?.confirm_provision,"true");
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
-test("dashboard blocks a ready verdict when the deterministic evidence is missing",async()=>{
- const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+test("dashboard blocks promotion when deterministic source evidence is missing",async()=>{
+ const badReport=structuredClone(report);badReport.instrumentationEvidence.status="event_literal_only";
+ const {server,url}=await fixtureServer(badReport);const browser=await chromium.launch({headless:true});
  try{
   const page=await browser.newPage();let dispatchCount=0;
-  await page.route("https://api.github.com/**",async route=>{if(route.request().url().includes("/dispatches"))dispatchCount++;await route.fulfill({status:200,contentType:"application/json",body:"{}"});});
+  await page.addInitScript(()=>sessionStorage.setItem("flagpilot-gh-token","fake-token"));
+  await page.route("https://api.github.com/**",async route=>{
+   const path=new URL(route.request().url()).pathname;
+   if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent"){await route.fulfill({status:200,contentType:"application/json",body:"{}"});return;}
+   if(path.endsWith("/dispatches"))dispatchCount++;
+   await route.fulfill({status:204,body:""});
+  });
   await page.goto(url);await page.getByText("Example checkout change").waitFor();
-  await page.evaluate(()=>{const form=document.querySelector("#promote-form");form.addEventListener("submit",e=>e.preventDefault(),{once:true});});
-  await page.locator("#delivery-verified").check();await page.locator("#promote-confirm").check();
-  await page.evaluate(()=>{window.sessionStorage.setItem("flagpilot-gh-token","fake");});
-  await page.reload();await page.getByText("Example checkout change").waitFor();
-  await page.locator("#delivery-verified").check();await page.locator("#promote-confirm").check();
-  await page.evaluate(()=>{const input=document.querySelector("#review-run-id");input.value="12345";});
-  await page.evaluate(()=>{const original=window.fetch;window.fetch=async (url,opts)=>{if(String(url).includes("reports/latest.json")){const response=await original(url,opts);const data=await response.json();data.instrumentationEvidence.status="event_literal_only";return new Response(JSON.stringify(data),{headers:{"content-type":"application/json"}});}return original(url,opts);};});
-  await page.reload();
   await page.locator("#delivery-verified").check();await page.locator("#promote-confirm").check();
   await page.locator("#promote-form button").click();
   await page.getByText(/Not eligible:/).waitFor();
