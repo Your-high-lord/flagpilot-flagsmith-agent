@@ -141,7 +141,9 @@ export function scanInstrumentationEvidence(input:{
     if(!sourceFile){failedFiles.add(entry.path);continue;}
     const syntactic=program.getSyntacticDiagnostics(sourceFile);
     const semantic=program.getSemanticDiagnostics(sourceFile);
-    if(syntactic.length>0||semantic.length>0){failedFiles.add(entry.path);continue;}
+    // Fail closed on semantic errors that mean a type-only binding is used as a runtime value.
+    const runtimeImportErrors=semantic.filter(diagnostic=>[1361,1362,1363,1364,1365,2693].includes(diagnostic.code));
+    if(syntactic.length>0||runtimeImportErrors.length>0){failedFiles.add(entry.path);continue;}
     if(hasTrackEventMutation(sourceFile))sdkMethodMutated=true;
 
     const defaultImports=new Set<ts.Symbol>();
