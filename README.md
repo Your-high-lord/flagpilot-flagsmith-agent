@@ -2,7 +2,7 @@
 
 **AI-assisted, approval-gated experiment provisioning for Flagsmith.** Built for WeMakeDevs × Flagsmith Toggle Wars 2026, Track 02.
 
-FlagPilot turns a natural-language experiment request into a validated proposal, checks the target environment, creates a multivariate feature and keyed variation with the Flagsmith CLI, creates the metric and draft experiment with the Flagsmith Management API, and verifies the resources. Starting the experiment is a separate workflow with a second human approval.
+FlagPilot turns a natural-language experiment request into a validated proposal, checks the target environment, creates the multivariate feature, keyed variation, metric and draft experiment with the Flagsmith Management API, and verifies the resources. Starting the experiment is a separate workflow with a second human approval.
 
 > **Safety rule:** the AI plans; deterministic application code validates and executes a small allowlist of operations. Gemini never receives credentials and never chooses arbitrary commands or API URLs.
 
@@ -22,7 +22,7 @@ FlagPilot turns a natural-language experiment request into a validated proposal,
 1. **Plan:** GitHub Actions sends the user request to Gemini. The response is parsed and validated against a strict schema. This job has no Flagsmith credentials and makes no Flagsmith writes.
 2. **Create approval:** the `flagsmith-create` GitHub Environment pauses the protected setup/provisioning job for human approval.
 3. **Preflight:** after approval and before any writes, a read-only Management API check verifies the warehouse is `Connected` and that the metric and experiment endpoints are readable.
-4. **Provision:** Flagsmith CLI v2 creates the feature and keyed variation. The Management API creates the metric and draft experiment. The code reads resources back and records their IDs.
+4. **Provision:** the Management API creates the multivariate feature, keyed variation, metric and draft experiment. Flagsmith CLI v2 is installed and used for resource inspection; it is not the writer for these resources. The code reads resources back and records their IDs.
 5. **Instrument and verify:** configure the demo with the public environment key, feature name, control label and exact conversion event. `getExperimentFlag` records exposure; `trackEvent` records the conversion; `flushEvents` sends buffered events.
 6. **Start approval:** a separate `start-experiment.yml` workflow requires an explicit checkbox and the protected `flagsmith-start` Environment approval. It starts the experiment and verifies `running` status.
 
@@ -82,6 +82,14 @@ Native Flagsmith Experimentation is currently documented as beta/Enterprise beta
 ### 6. Approval and credential boundary
 
 The `flagsmith-create` environment protects environment creation, read-only preflight and resource provisioning. The `flagsmith-start` environment independently protects starting the experiment. The Gemini planning job has no Flagsmith credential. The Management API key is available only inside the protected environments and is never sent to Gemini or the browser demo.
+
+## FlagPilot operator console
+
+The GitHub Pages site is the FlagPilot operator console. It provides the natural-language request form, proposal/resource summary, workflow timeline, evidence links and navigation to the Flagsmith SDK demo. To submit a new request from the page, connect a fine-grained GitHub personal access token restricted to this repository with **Actions: read and write** permission. The token is kept in the browser tab's session storage and is sent only to `api.github.com`; it is never sent to FlagPilot or Flagsmith servers. The Flagsmith organisation Management API key remains a protected GitHub Environment secret.
+
+GitHub Environment approvals still happen on GitHub's protected deployment review screen. The dashboard links to those workflows; it does not bypass or simulate approval. Live workflow status is read from the GitHub Actions API. The current experiment/resource summary is a verified snapshot and is not presented as a live Flagsmith API query.
+
+The original visitor-facing SDK demo is preserved at `store.html`.
 
 ## Run the workflows
 
