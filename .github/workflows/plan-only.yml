@@ -1,0 +1,39 @@
+name: FlagPilot · AI proposal only
+on:
+  workflow_dispatch:
+    inputs:
+      experiment_request:
+        description: Describe the experiment, variants and success metric
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: flagpilot-plan-only-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  plan:
+    name: Generate and validate proposal (no Flagsmith writes)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Generate structured experiment proposal
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
+          EXPERIMENT_REQUEST: ${{ inputs.experiment_request }}
+        run: npm run plan
+      - name: Upload validated proposal
+        uses: actions/upload-artifact@v4
+        with:
+          name: flagpilot-plan-only
+          path: artifacts/plan.json
+          if-no-files-found: error
+          retention-days: 3
