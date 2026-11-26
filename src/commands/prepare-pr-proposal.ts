@@ -8,6 +8,7 @@ const reviewRunId=numeric("REVIEW_RUN_ID");
 const rolloutPercentage=numeric("ROLLOUT_PERCENTAGE");
 const timeframeDays=numeric("TIMEFRAME_DAYS");
 if(process.env.CONFIRM_PROVISION!=="true")throw new Error("Explicit confirmation is required before preparing a PR-derived Flagsmith draft.");
+if(process.env.CONFIRM_EVENT_DELIVERY!=="true")throw new Error("A human must explicitly confirm that the exact event was delivered to Flagsmith and the connected warehouse before promotion.");
 const reportPath="artifacts/source-review/pr-review.json";
 const report=JSON.parse(await readFile(reportPath,"utf8")) as unknown;
 if(!report||typeof report!=="object"||Array.isArray(report))throw new Error("The downloaded PR review report is invalid.");
