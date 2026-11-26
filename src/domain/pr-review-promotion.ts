@@ -1,5 +1,6 @@
 import {parsePullRequestUrl,validatePrReview,type PrReview} from "./pr-review.js";
 import {validateProposal,withDeterministicNames,type ExperimentProposal} from "./proposal.js";
+import type {InstrumentationSourceEvidence} from "./instrumentation-evidence.js";
 
 const isRecord=(value:unknown):value is Record<string,unknown>=>typeof value==="object"&&value!==null&&!Array.isArray(value);
 function positiveInteger(value:number,name:string,min:number,max:number):number{
@@ -11,6 +12,9 @@ export interface PrReviewPromotionOptions{
   repositoryFullName:string;
   rolloutPercentage:number;
   timeframeDays:number;
+  currentHeadSha:string;
+  currentBaseSha:string;
+  sourceEvidence:InstrumentationSourceEvidence;
 }
 export interface PreparedPrProposal{
   proposal:ExperimentProposal;
@@ -19,7 +23,10 @@ export interface PreparedPrProposal{
     pullRequestTitle:string;
     reviewRunId:number;
     verdict:"ready_for_experiment";
-    instrumentationStatus:"verified";
+    instrumentationStatus:"source_call_found";
+    sourceHeadSha:string;
+    sourceBaseSha:string;
+    sourceEvidence:InstrumentationSourceEvidence;
     implementationStatus:PrReview["implementationPlan"]["status"];
     manualStepsSaved:number;
   };
@@ -42,9 +49,18 @@ export function prepareProposalFromReview(value:unknown,options:PrReviewPromotio
   try{sourceRunUrl=new URL(value.workflowRunUrl);}catch{throw new Error("The originating review workflow URL is invalid.");}
   const expectedPath=`/${repository}/actions/runs/${runId}`;
   if(sourceRunUrl.protocol!=="https:"||sourceRunUrl.hostname!=="github.com"||sourceRunUrl.pathname!==expectedPath||sourceRunUrl.search||sourceRunUrl.hash)throw new Error("The review artifact does not belong to the selected successful run in this repository.");
+  if(value.pullRequest.truncated!==false)throw new Error("FlagPilot refused promotion: the source review diff was truncated or its completeness is unknown. Run a fresh complete review.");
+  if(typeof value.pullRequest.reportedChangedFileCount!=="number"||value.pullRequest.reportedChangedFileCount!==changedFiles.length)throw new Error("FlagPilot refused promotion: the reviewed changed-file count is incomplete.");
+  const headSha=value.pullRequest.headSha,baseSha=value.pullRequest.baseSha;
+  if(typeof headSha!=="string"||!/^[0-9a-f]{40}$/i.test(headSha)||typeof baseSha!=="string"||!/^[0-9a-f]{40}$/i.test(baseSha))throw new Error("FlagPilot refused promotion: the report is missing valid source head/base commit SHAs.");
+  if(options.currentHeadSha!==headSha||options.currentBaseSha!==baseSha)throw new Error("FlagPilot refused promotion: the pull request changed after review. Run a fresh review against the current head and base commits.");
+  const evidence=options.sourceEvidence;
+  const rawReview=isRecord(value.review)?value.review:{};
+  const rawMetric=isRecord(rawReview.metric)?rawReview.metric:{};
+  if(evidence.status!=="verified_call_found"||evidence.eventName!==rawMetric.eventName||evidence.sourceSha!==headSha||evidence.failedFiles.length>0||evidence.matches.length===0)throw new Error("FlagPilot refused promotion: deterministic source evidence did not find the exact metric event passed to a supported tracking call at the reviewed head commit.");
   const review=validatePrReview(value.review,changedFiles);
   if(review.verdict!=="ready_for_experiment")throw new Error(`FlagPilot refused provisioning: the AI verdict is '${review.verdict}'. Only ready_for_experiment reviews can be promoted.`);
-  if(review.metric.instrumentation!=="present"||review.instrumentationPlan.status!=="verified")throw new Error("FlagPilot refused provisioning: the metric event must be present in the reviewed code and its instrumentation must be verified first.");
+  if(review.metric.instrumentation!=="present"||review.instrumentationPlan.status!=="verified")throw new Error("FlagPilot refused provisioning: Gemini must also identify the metric event and its instrumentation plan as present/verified; deterministic source evidence is checked independently.");
   if(review.codeTargets.length===0)throw new Error("FlagPilot refused provisioning: the review did not identify a concrete changed code location.");
   if(review.implementationPlan.status==="not_applicable")throw new Error("FlagPilot refused provisioning: the AI marked implementation as not applicable.");
   const title=value.pullRequest.title.trim().replace(/\s+/g," ").slice(0,75);
@@ -71,7 +87,10 @@ export function prepareProposalFromReview(value:unknown,options:PrReviewPromotio
       pullRequestTitle:title,
       reviewRunId:runId,
       verdict:"ready_for_experiment",
-      instrumentationStatus:"verified",
+      instrumentationStatus:"source_call_found",
+      sourceHeadSha:headSha,
+      sourceBaseSha:baseSha,
+      sourceEvidence:evidence,
       implementationStatus:review.implementationPlan.status,
       manualStepsSaved:review.manualStepsSaved
     }
