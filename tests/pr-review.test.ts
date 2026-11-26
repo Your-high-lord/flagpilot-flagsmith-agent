@@ -31,3 +31,6 @@ test("rejects patches that touch more than one changed file",()=>assert.throws((
 @@ -1 +1 @@
 -old
 +new`}},files),/exactly one file/));
+
+test("uses a safe default when the AI omits optional patchNote",()=>assert.equal(validatePrReview({...good,implementationPlan:{...good.implementationPlan,patchNote:""}},files).implementationPlan.patchNote,"No safe patch was supplied; follow the manual review steps before implementation."));
+test("uses a safe default when the AI omits patchNote",()=>{const copy=structuredClone(good);delete copy.implementationPlan.patchNote;assert.match(validatePrReview(copy,files).implementationPlan.patchNote,/No safe patch was supplied/);});
