@@ -29,6 +29,7 @@ on:
 permissions:
   actions: read
   contents: read
+  pull-requests: read
 concurrency:
   group: flagpilot-pr-promotion-${{ github.ref }}
   cancel-in-progress: false
@@ -110,6 +111,10 @@ jobs:
         with:
           name: flagpilot-pr-derived-plan
           path: artifacts
+      - name: Recheck source PR after approval and immediately before provisioning
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm run verify:pr-source
       - name: Provision real Flagsmith resources
         env:
           FLAGSMITH_API_KEY: ${{ secrets.FLAGSMITH_API_KEY }}
