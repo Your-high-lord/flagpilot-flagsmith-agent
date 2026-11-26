@@ -10,7 +10,7 @@ FlagPilot turns a natural-language experiment request into a validated proposal,
 
 - One control and one treatment variation.
 - All-users audience only (segment targeting is deliberately out of scope for this first version).
-- 1–100% experiment rollout; 1–99% treatment allocation, with control receiving the remainder.
+- 1–100% experiment rollout; 1–99% treatment allocation, with control receiving the remainder. The selected measurement window is recorded as planning metadata; it does not automatically stop the experiment.
 - Occurrence metric with expected direction `increase`.
 - Resource names are deterministic for an identical request so reruns can recognise resources created by an interrupted run.
 - Existing resources are reused only when their values match; mismatches stop without overwriting.
@@ -94,11 +94,11 @@ This is deliberately analysis-only: it does not commit code, modify the pull req
 The PR review can be promoted without manually retyping Gemini's recommendation:
 
 1. Run **Analyse this PR** and wait for the review workflow to finish successfully.
-2. Inspect the complete report. Promotion is allowed only when the verdict is `ready_for_experiment`, the metric instrumentation is `present`, the instrumentation plan is `verified`, at least one code location is grounded in the changed files, and implementation is applicable.
+2. Inspect the complete report. Promotion is allowed only when the verdict is `ready_for_experiment`, the metric instrumentation is `present`, the instrumentation plan is `verified` and a deterministic AST scan finds the exact case-sensitive event passed to `trackEvent` on an official Flagsmith JavaScript SDK client, at least one code location is grounded in the changed files, and implementation is applicable.
 3. In the dashboard's **Promote an eligible PR review** panel, confirm the source run ID, choose a conservative rollout and measurement window, and explicitly request draft creation.
 4. The promotion workflow verifies that the supplied run is a successful `review-pull-request.yml` run on `main`, downloads that run's `flagpilot-pr-review` artifact, validates its provenance and schema, and converts the reviewed variants and metric into the existing strict experiment proposal format.
 5. The workflow pauses at the protected `flagsmith-create` GitHub Environment. Approve only after reviewing the generated plan summary. After approval and immediately before any Flagsmith write, it fetches the source PR again and rejects a closed or changed PR. It then runs the same read-only Flagsmith preflight and provisioning code used by the natural-language workflow.
-6. The output is a **draft** experiment with read-back evidence. SDK instrumentation and event delivery must be verified separately. Starting still requires the independent `flagsmith-start` approval.
+6. The output is a **draft** experiment with read-back evidence. Reuse is permitted only when the complete stored feature, treatment, metric, hypothesis, audience and rollout configuration exactly matches the approved proposal. PR promotions version resource names by reviewed head/base commits and approved configuration, so a changed commit or proposal gets a distinct identity rather than silently reusing an old draft. SDK instrumentation and event delivery must be verified separately. Starting still requires the independent `flagsmith-start` approval.
 
 The promotion workflow rejects `needs_engineering_work` and `not_a_good_experiment` verdicts, missing or unclear instrumentation, mismatched run IDs/repositories, ungrounded code locations and invalid rollout/timeframe values. It also rejects truncated diffs, incomplete changed-file counts, missing source commit SHAs, stale PR head/base commits and incomplete source scans. A deterministic scanner independently checks the changed source files at the reviewed head SHA for the exact metric event passed to a supported tracking call. This is source-code evidence only: it does not prove that an event was delivered to Flagsmith or the warehouse. The dashboard and workflow therefore require an explicit human confirmation of real event delivery before promotion. A rejected report does not reach the Flagsmith-writing job. The promotion path does not edit the PR or apply a suggested code patch; a human must implement and review code changes separately.
 
@@ -172,3 +172,6 @@ Synthetic visitors can be used to verify instrumentation, as confirmed in the To
 ## Competition disclosure
 
 FlagPilot uses Gemini for natural-language proposal generation, GitHub Actions for automation and the Flagsmith CLI/Management API/JavaScript SDK for real feature flag and experiment operations. All resource writes and experiment start operations require human approval. Any synthetic demo data is explicitly labelled.
+
+
+**Measurement window:** `timeframeDays` is a planning/reporting value only. Flagsmith does not receive an automatic end date from this workflow, and FlagPilot does not yet schedule a stop. An operator must monitor and complete/stop the experiment separately. The dashboard must not describe this as an automatically enforced duration.
