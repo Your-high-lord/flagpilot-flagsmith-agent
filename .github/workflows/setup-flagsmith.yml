@@ -19,7 +19,6 @@ on:
         type: string
 permissions:
   contents: read
-  actions: write
 concurrency:
   group: flagpilot-environment-setup-${{ github.ref }}
   cancel-in-progress: false
@@ -52,17 +51,14 @@ jobs:
         env:
           FLAGSMITH_API_KEY: ${{ secrets.FLAGSMITH_API_KEY }}
         run: npm run setup:environment
-      - name: Save non-secret repository variables
-        env:
-          ORG: ${{ inputs.organisation }}
-          PROJECT: ${{ inputs.project }}
-          PROJECT_ID: ${{ steps.environment.outputs.project_id }}
-          ENVIRONMENT_KEY: ${{ steps.environment.outputs.environment_key }}
-          GH_TOKEN: ${{ github.token }}
+      - name: Show required repository variables
         run: |
-          set -euo pipefail
-          gh variable set FLAGSMITH_ORGANISATION --body "$ORG" --repo "$GITHUB_REPOSITORY"
-          gh variable set FLAGSMITH_PROJECT --body "$PROJECT" --repo "$GITHUB_REPOSITORY"
-          gh variable set FLAGSMITH_PROJECT_ID --body "$PROJECT_ID" --repo "$GITHUB_REPOSITORY"
-          gh variable set FLAGSMITH_ENVIRONMENT_KEY --body "$ENVIRONMENT_KEY" --repo "$GITHUB_REPOSITORY"
-          gh variable set GEMINI_MODEL --body "gemini-3.8-flash" --repo "$GITHUB_REPOSITORY"
+          {
+            echo '## Next manual setup step'
+            echo 'Flagsmith environment creation succeeded. GitHub blocks the workflow GITHUB_TOKEN from writing Actions variables, so set these under Settings → Secrets and variables → Actions → Variables:'
+            echo '- FLAGSMITH_ORGANISATION = Asir'''s Org
+            echo '- FLAGSMITH_PROJECT = My first project'
+            echo '- FLAGSMITH_PROJECT_ID = value shown above'
+            echo '- FLAGSMITH_ENVIRONMENT_KEY = client-side environment key from this run output (public SDK key)'
+            echo 'Do not store the organisation API key as a variable; it remains an environment secret.'
+          } >> "$GITHUB_STEP_SUMMARY"
