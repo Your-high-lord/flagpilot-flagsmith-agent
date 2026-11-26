@@ -74,7 +74,12 @@ export function validatePrReview(value:unknown,changedFiles:string[]):PrReview {
   const implementationStatus=implementation.status;
   if(!["patch_ready","manual_review_required","not_applicable"].includes(String(implementationStatus)))throw new Error("Implementation plan status is invalid.");
   const patch=str(implementation.patch||"No patch generated.", "implementationPlan.patch",20000);
-  const patchNote=str(implementation.patchNote,"implementationPlan.patchNote",700);
+  const rawPatchNote=implementation.patchNote;
+  const patchNote=typeof rawPatchNote==="string"&&rawPatchNote.trim()
+    ? rawPatchNote.trim().slice(0,700)
+    : implementationStatus==="patch_ready"
+      ? "Review the suggested patch carefully against the target repository before applying it."
+      : "No safe patch was supplied; follow the manual review steps before implementation.";
   if(implementationStatus==="patch_ready"){
     if(patch==="No patch generated."||!patch.includes("@@"))throw new Error("A patch-ready implementation must contain a unified diff.");
     const paths=[...patch.matchAll(/^(?:\+\+\+|---) [ab]\/([^\r\n]+)$/gm)].map(m=>m[1]);
