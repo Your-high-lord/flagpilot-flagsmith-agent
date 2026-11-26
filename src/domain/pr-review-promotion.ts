@@ -23,7 +23,7 @@ export interface PreparedPrProposal{
     pullRequestTitle:string;
     reviewRunId:number;
     verdict:"ready_for_experiment";
-    instrumentationStatus:"source_call_found";
+    instrumentationStatus:"flagsmith_sdk_call_found";
     sourceHeadSha:string;
     sourceBaseSha:string;
     sourceEvidence:InstrumentationSourceEvidence;
@@ -57,7 +57,7 @@ export function prepareProposalFromReview(value:unknown,options:PrReviewPromotio
   const evidence=options.sourceEvidence;
   const rawReview=isRecord(value.review)?value.review:{};
   const rawMetric=isRecord(rawReview.metric)?rawReview.metric:{};
-  if(evidence.status!=="tracking_call_found"||evidence.eventName!==rawMetric.eventName||evidence.sourceSha!==headSha||evidence.failedFiles.length>0||evidence.matches.length===0)throw new Error("FlagPilot refused promotion: deterministic source evidence did not find the exact metric event passed to a supported tracking call at the reviewed head commit.");
+  if(evidence.status!=="flagsmith_sdk_call_found"||evidence.eventName!==rawMetric.eventName||evidence.sourceSha!==headSha||evidence.failedFiles.length>0||evidence.matches.length===0)throw new Error("FlagPilot refused promotion: deterministic source evidence did not find the exact metric event passed to a supported tracking call at the reviewed head commit.");
   const review=validatePrReview(value.review,changedFiles);
   if(review.verdict!=="ready_for_experiment")throw new Error(`FlagPilot refused provisioning: the AI verdict is '${review.verdict}'. Only ready_for_experiment reviews can be promoted.`);
   if(review.metric.instrumentation!=="present"||review.instrumentationPlan.status!=="verified")throw new Error("FlagPilot refused provisioning: the metric event must be present in Gemini's review and the instrumentation plan must be verified; deterministic source evidence is checked independently.");
@@ -87,7 +87,7 @@ export function prepareProposalFromReview(value:unknown,options:PrReviewPromotio
       pullRequestTitle:title,
       reviewRunId:runId,
       verdict:"ready_for_experiment",
-      instrumentationStatus:"source_call_found",
+      instrumentationStatus:"flagsmith_sdk_call_found",
       sourceHeadSha:headSha,
       sourceBaseSha:baseSha,
       sourceEvidence:evidence,
