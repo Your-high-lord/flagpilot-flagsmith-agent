@@ -1,0 +1,38 @@
+name: FlagPilot · Start experiment (second approval)
+on:
+  workflow_dispatch:
+    inputs:
+      experiment_id:
+        description: Numeric experiment ID from the provisioning report
+        required: true
+        type: string
+      demo_verified:
+        description: Confirm demo instrumentation and smoke test
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: flagpilot-start-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  start:
+    name: Start experiment after explicit confirmation
+    if: ${{ inputs.demo_verified == true }}
+    runs-on: ubuntu-latest
+    environment:
+      name: flagsmith-start
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Start and verify experiment
+        env:
+          FLAGSMITH_API_KEY: ${{ secrets.FLAGSMITH_API_KEY }}
+          FLAGSMITH_API_URL: https://api.flagsmith.com
+          FLAGSMITH_ENVIRONMENT_KEY: ${{ vars.FLAGSMITH_ENVIRONMENT_KEY }}
+          EXPERIMENT_ID: ${{ inputs.experiment_id }}
+        run: npm run start
