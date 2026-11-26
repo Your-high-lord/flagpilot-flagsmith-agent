@@ -111,14 +111,12 @@ export function scanInstrumentationEvidence(input:{
     '  export default flagsmith;',
     '  export function createFlagsmithInstance(): FlagsmithClient;',
     '}',
-    'declare module "*";',
-    'declare var window: { flagsmith: FlagsmithClient };',
-    'declare var globalThis: { flagsmith: FlagsmithClient };'
+    'declare module "*";'
   ].join("\n");
   const options:ts.CompilerOptions={
     target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,
     moduleResolution:ts.ModuleResolutionKind.Node10,allowJs:true,checkJs:true,
-    noResolve:true,skipLibCheck:true,noEmit:true,strict:false,
+    noResolve:false,skipLibCheck:true,noEmit:true,strict:false,
     allowSyntheticDefaultImports:true,types:[]
   };
   const host=ts.createCompilerHost(options);
