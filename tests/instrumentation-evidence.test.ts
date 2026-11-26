@@ -48,7 +48,7 @@ test("rejects dynamic event arguments",()=>{
  assert.equal(r.status,"not_found");assert.equal(r.trackingCallFound,false);
 });
 test("rejects locally shadowed window",()=>{
- const r=scan('const window={flagsmith:{trackEvent(){}}}; window.flagsmith.trackEvent("CheckoutStarted");');
+ const r=scan('export {}; const window={flagsmith:{trackEvent(){}}}; window.flagsmith.trackEvent("CheckoutStarted");');
  assert.equal(r.status,"event_literal_only");
 });
 test("syntax errors make the scan incomplete",()=>{
