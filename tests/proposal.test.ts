@@ -1,0 +1,11 @@
+import test from "node:test";import assert from "node:assert/strict";import {ProposalValidationError,validateProposal,withDeterministicNames} from "../src/domain/proposal.js";
+const good={experimentName:"Signup CTA wording",featureName:"signup_cta_test",hypothesis:"A clearer CTA will increase completed signups.",timeframeDays:7,targetAudience:"all",rolloutPercentage:100,controlLabel:"Start free trial",treatment:{key:"try_free",value:"Try it free",allocation:50},metric:{name:"Signup completed",eventName:"demo_signup_completed"}};
+test("valid proposal normalises feature prefix",()=>assert.equal(validateProposal(good).featureName,"fp_signup_cta_test"));
+test("unsupported audience rejected",()=>assert.throws(()=>validateProposal({...good,targetAudience:"beta_users"}),/all-users audience/));
+test("invalid treatment allocation rejected",()=>assert.throws(()=>validateProposal({...good,treatment:{...good.treatment,allocation:100}}),/between 1 and 99/));
+test("reserved event names rejected",()=>assert.throws(()=>validateProposal({...good,metric:{...good.metric,eventName:"$exposure"}}),/reserved/));
+test("control variation key rejected",()=>assert.throws(()=>validateProposal({...good,treatment:{...good.treatment,key:"control"}}),/reserved/));
+test("unknown fields rejected",()=>assert.throws(()=>validateProposal({...good,arbitraryCommand:"delete all flags"}),/Unexpected fields/));
+test("non-integer rollout rejected",()=>assert.throws(()=>validateProposal({...good,rolloutPercentage:20.5}),/whole number/));
+test("deterministic names stable for same request",()=>{const p=validateProposal(good);assert.equal(withDeterministicNames(p,"same").featureName,withDeterministicNames(p,"same").featureName);assert.notEqual(withDeterministicNames(p,"same").featureName,withDeterministicNames(p,"different").featureName);});
+test("invalid object raises typed error",()=>assert.throws(()=>validateProposal(null),ProposalValidationError));
