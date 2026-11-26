@@ -1,0 +1,18 @@
+{
+  "name": "flagpilot-flagsmith-agent",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Approval-gated AI-assisted Flagsmith experiment provisioning for Toggle Wars Track 02.",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/tests/*.test.js",
+    "plan": "npm run build && node dist/src/commands/plan.js",
+    "preflight": "npm run build && node dist/src/commands/preflight.js",
+    "provision": "npm run build && node dist/src/commands/provision.js",
+    "start": "npm run build && node dist/src/commands/start.js",
+    "setup:environment": "npm run build && node dist/src/commands/setup-environment.js"
+  },
+  "devDependencies": { "@types/node": "22.19.1", "typescript": "5.9.3" }
+}
