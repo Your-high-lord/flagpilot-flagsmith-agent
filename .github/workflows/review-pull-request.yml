@@ -1,0 +1,40 @@
+name: FlagPilot · Review PR for experiment opportunities
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request_url:
+        description: Public GitHub pull request URL to analyse
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: flagpilot-pr-review-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  review:
+    name: AI code review and experiment design
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Analyse PR diff with Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
+          GEMINI_FALLBACK_MODEL: ${{ vars.GEMINI_FALLBACK_MODEL || 'gemini-3.5-flash-lite' }}
+          PULL_REQUEST_URL: ${{ inputs.pull_request_url }}
+        run: npm run review:pr
+      - name: Upload PR review report
+        uses: actions/upload-artifact@v4
+        with:
+          name: flagpilot-pr-review
+          path: artifacts/pr-review.json
+          if-no-files-found: error
+          retention-days: 7
