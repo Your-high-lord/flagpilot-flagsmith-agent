@@ -32,7 +32,7 @@ test("rejects unrelated analytics.trackEvent",()=>{
  assert.equal(r.status,"event_literal_only");assert.equal(r.trackingCallFound,false);
 });
 test("rejects unrelated otherService.sendEvent",()=>{
- const r=scan('const otherService={sendEvent:()=>{}}; otherService.sendEvent("CheckoutStarted");');
+ const r=scan('declare const otherService:any; const service={sendEvent:()=>{}}; service.sendEvent("CheckoutStarted");');
  assert.equal(r.status,"event_literal_only");assert.equal(r.trackingCallFound,false);
 });
 test("rejects incorrect event capitalization",()=>{
@@ -40,11 +40,11 @@ test("rejects incorrect event capitalization",()=>{
  assert.equal(r.status,"not_found");assert.equal(r.trackingCallFound,false);
 });
 test("rejects generic track even on Flagsmith client",()=>{
- const r=scan('import flagsmith from "@flagsmith/flagsmith"; flagsmith.track("CheckoutStarted");');
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; const client:any=flagsmith; client.track("CheckoutStarted");');
  assert.equal(r.status,"event_literal_only");assert.equal(r.trackingCallFound,false);
 });
 test("rejects dynamic event arguments",()=>{
- const r=scan('import flagsmith from "@flagsmith/flagsmith"; flagsmith.trackEvent(EVENT_NAME);');
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; declare const EVENT_NAME:string; flagsmith.trackEvent(EVENT_NAME);');
  assert.equal(r.status,"not_found");assert.equal(r.trackingCallFound,false);
 });
 test("rejects locally shadowed window",()=>{
@@ -91,12 +91,12 @@ test("rejects a type-only namespace import",()=>{
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
 });
 test("rejects direct replacement of the SDK trackEvent method",()=>{
- const r=scan('import flagsmith from "@flagsmith/flagsmith"; flagsmith.trackEvent=otherService.trackEvent; flagsmith.trackEvent("CheckoutStarted");');
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; declare const otherService:any; flagsmith.trackEvent=otherService.trackEvent; flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
  assert.match(r.note,/mutation|replacement/i);
 });
 test("rejects computed replacement of the SDK trackEvent method",()=>{
- const r=scan('import flagsmith from "@flagsmith/flagsmith"; flagsmith["trackEvent"]=otherService.trackEvent; flagsmith.trackEvent("CheckoutStarted");');
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; declare const otherService:any; flagsmith["trackEvent"]=otherService.trackEvent; flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
 });
 test("rejects deletion of the SDK trackEvent method",()=>{
@@ -104,11 +104,11 @@ test("rejects deletion of the SDK trackEvent method",()=>{
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
 });
 test("rejects Object.defineProperty replacement of trackEvent",()=>{
- const r=scan('import flagsmith from "@flagsmith/flagsmith"; Object.defineProperty(flagsmith,"trackEvent",{value:otherService.sendEvent}); flagsmith.trackEvent("CheckoutStarted");');
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; declare const otherService:any; Object.defineProperty(flagsmith,"trackEvent",{value:otherService.sendEvent}); flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
 });
 test("rejects Object.assign replacement of trackEvent",()=>{
- const r=scan('import flagsmith from "@flagsmith/flagsmith"; Object.assign(flagsmith,{trackEvent:otherService.sendEvent}); flagsmith.trackEvent("CheckoutStarted");');
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; declare const otherService:any; Object.assign(flagsmith,{trackEvent:otherService.sendEvent}); flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
 });
 test("semantic diagnostics make source evidence incomplete",()=>{
@@ -117,11 +117,11 @@ test("semantic diagnostics make source evidence incomplete",()=>{
 });
 
 test("rejects Object.defineProperties replacement of trackEvent",()=>{
- const r=scan('import flagsmith from "@flagsmith/flagsmith"; Object.defineProperties(flagsmith,{trackEvent:{value:otherService.sendEvent}}); flagsmith.trackEvent("CheckoutStarted");');
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; declare const otherService:any; Object.defineProperties(flagsmith,{trackEvent:{value:otherService.sendEvent}}); flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
 });
 test("rejects Reflect.set replacement of trackEvent",()=>{
- const r=scan('import flagsmith from "@flagsmith/flagsmith"; Reflect.set(flagsmith,"trackEvent",otherService.sendEvent); flagsmith.trackEvent("CheckoutStarted");');
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; declare const otherService:any; Reflect.set(flagsmith,"trackEvent",otherService.sendEvent); flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
 });
 test("rejects Reflect.deleteProperty removal of trackEvent",()=>{
