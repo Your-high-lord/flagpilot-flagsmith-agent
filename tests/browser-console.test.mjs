@@ -78,3 +78,34 @@ test("dashboard blocks promotion when deterministic source evidence is missing",
   assert.equal(dispatchCount,0);
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
+
+test("dashboard blocks missing metric, incomplete AI evidence, and inapplicable implementation",async()=>{
+ const badReport=structuredClone(report);const {server,url}=await fixtureServer(badReport);const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();let dispatchCount=0;
+  await page.addInitScript(()=>sessionStorage.setItem("flagpilot-gh-token","fake-token"));
+  await page.route("https://api.github.com/**",async route=>{
+   const path=new URL(route.request().url()).pathname;
+   if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent"){await route.fulfill({status:200,contentType:"application/json",body:"{}"});return;}
+   if(path.endsWith("/dispatches"))dispatchCount++;
+   await route.fulfill({status:204,body:""});
+  });
+  const cases=[
+   ()=>{badReport.review.verdict="needs_engineering_work";},
+   ()=>{badReport.review.metric.instrumentation="missing";},
+   ()=>{badReport.review.instrumentationPlan.status="unclear";},
+   ()=>{badReport.review.codeTargets=[];},
+   ()=>{badReport.review.implementationPlan.status="not_applicable";},
+   ()=>{badReport.instrumentationEvidence.eventName="different_event";},
+   ()=>{badReport.pullRequest.reportedChangedFileCount=2;}
+  ];
+  for(const mutate of cases){
+   mutate();await page.goto(url);
+   await page.getByText("Example checkout change").waitFor();
+   await page.locator("#delivery-verified").check();await page.locator("#promote-confirm").check();
+   await page.locator("#promote-form button").click();
+   await page.getByText(/Not eligible:/).waitFor();
+  }
+  assert.equal(dispatchCount,0);
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
