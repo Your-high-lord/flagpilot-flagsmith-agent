@@ -109,3 +109,27 @@ test("dashboard blocks missing metric, incomplete AI evidence, and inapplicable 
   assert.equal(dispatchCount,0);
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
+
+test("start request uses explicit provisioning run and experiment IDs instead of a hardcoded ID",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();let dispatchBody=null;
+  await page.addInitScript(()=>sessionStorage.setItem("flagpilot-gh-token","fake-token"));
+  await page.route("https://api.github.com/**",async route=>{
+   const request=route.request(),path=new URL(request.url()).pathname;
+   if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent"){await route.fulfill({status:200,contentType:"application/json",body:"{}"});return;}
+   if(path.endsWith("/actions/workflows/start-experiment.yml/dispatches")&&request.method()==="POST"){dispatchBody=request.postDataJSON();await route.fulfill({status:204,body:""});return;}
+   if(path.endsWith("/actions/runs")){await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({workflow_runs:[]})});return;}
+   await route.fulfill({status:404,body:"not found"});
+  });
+  await page.goto(url);
+  await page.locator("#provision-run-id").fill("45912345678");
+  await page.locator("#start-experiment-id").fill("98765");
+  await page.locator("#demo-verified").check();
+  await page.locator("#start-form button").click();
+  await page.getByText(/Start request submitted/).waitFor();
+  assert.equal(dispatchBody?.inputs?.provision_run_id,"45912345678");
+  assert.equal(dispatchBody?.inputs?.experiment_id,"98765");
+  assert.equal(dispatchBody?.inputs?.demo_verified,"true");
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
