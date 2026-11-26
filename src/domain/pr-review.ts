@@ -17,6 +17,21 @@ export interface PrReview {
   approvalQuestions: string[];
   manualStepsSaved: number;
   nextStep: string;
+  instrumentationPlan: {
+    status: "verified" | "missing" | "unclear";
+    eventName: string;
+    trigger: string;
+    properties: string[];
+    recommendation: string;
+  };
+  implementationPlan: {
+    status: "patch_ready" | "manual_review_required" | "not_applicable";
+    summary: string;
+    steps: string[];
+    tests: string[];
+    patch: string;
+    patchNote: string;
+  };
 }
 const record=(v:unknown):v is Record<string,unknown>=>typeof v==="object"&&v!==null&&!Array.isArray(v);
 const str=(v:unknown,n:string,max=500):string=>{if(typeof v!=="string"||!v.trim()||v.trim().length>max)throw new Error(`PR review field '${n}' must be non-empty text of at most ${max} characters.`);return v.trim();};
@@ -47,6 +62,29 @@ export function validatePrReview(value:unknown,changedFiles:string[]):PrReview {
   if(variants[0]!.allocation+variants[1]!.allocation!==100)throw new Error("Control and treatment allocations must add up to 100.");
   if(!Array.isArray(value.codeTargets)||value.codeTargets.length>5)throw new Error("PR review codeTargets must contain at most five entries.");
   const codeTargets=value.codeTargets.map((v,i)=>{if(!record(v))throw new Error("Code target must be an object.");const file=str(v.file,`codeTargets[${i}].file`,240);if(!changedFiles.includes(file))throw new Error(`Code target '${file}' was not present in the reviewed pull request.`);return{file,reason:str(v.reason,"codeTarget.reason",300),suggestedChange:str(v.suggestedChange,"codeTarget.suggestedChange",500)};});
+  if(!record(value.instrumentationPlan))throw new Error("PR review instrumentationPlan is missing.");
+  const instrumentationPlan=value.instrumentationPlan;
+  const instrumentationStatus=instrumentationPlan.status;
+  if(!["verified","missing","unclear"].includes(String(instrumentationStatus)))throw new Error("Instrumentation plan status is invalid.");
+  const planEvent=str(instrumentationPlan.eventName,"instrumentationPlan.eventName",64);
+  if(planEvent!==eventName)throw new Error("Instrumentation plan eventName must match the primary metric eventName.");
+  const properties=list(instrumentationPlan.properties,"instrumentationPlan.properties",6);
+  if(!record(value.implementationPlan))throw new Error("PR review implementationPlan is missing.");
+  const implementation=value.implementationPlan;
+  const implementationStatus=implementation.status;
+  if(!["patch_ready","manual_review_required","not_applicable"].includes(String(implementationStatus)))throw new Error("Implementation plan status is invalid.");
+  const patch=str(implementation.patch||"No patch generated.", "implementationPlan.patch",20000);
+  const patchNote=str(implementation.patchNote,"implementationPlan.patchNote",700);
+  if(implementationStatus==="patch_ready"){
+    if(patch==="No patch generated."||!patch.includes("@@"))throw new Error("A patch-ready implementation must contain a unified diff.");
+    const paths=[...patch.matchAll(/^(?:\\+\\+\\+|---) [ab]\\/([^\\r\\n]+)$/gm)].map(m=>m[1]);
+    const unique=[...new Set(paths)];
+    if(unique.length!==1||!changedFiles.includes(unique[0]!))throw new Error("Implementation patch must target exactly one file from the reviewed PR.");
+    if(patch.includes("GIT binary patch")||patch.includes("\\0"))throw new Error("Binary implementation patches are not supported.");
+    if(unique[0]!.includes(".."))throw new Error("Implementation patch contains an unsafe path.");
+  } else if(patch!=="No patch generated." && patch.trim()!=="") {
+    throw new Error("A patch must not be supplied when implementation status is not patch_ready.");
+  }
   const saved=value.manualStepsSaved;if(typeof saved!=="number"||!Number.isInteger(saved)||saved<0||saved>20)throw new Error("manualStepsSaved must be a number from 0 to 20.");
   return{
     verdict:verdict as PrReview["verdict"],changeSummary:str(value.changeSummary,"changeSummary",700),
@@ -54,6 +92,21 @@ export function validatePrReview(value:unknown,changedFiles:string[]):PrReview {
     flag:{name,purpose:str(value.flag.purpose,"flag.purpose",300),safeDefault:"control"},
     variants,metric:{name:str(value.metric.name,"metric.name",100),eventName,trigger:str(value.metric.trigger,"metric.trigger",300),instrumentation:instrumentation as PrReview["metric"]["instrumentation"]},
     codeTargets,risks:list(value.risks,"risks"),approvalQuestions:list(value.approvalQuestions,"approvalQuestions"),
-    manualStepsSaved:saved,nextStep:str(value.nextStep,"nextStep",500)
+    manualStepsSaved:saved,nextStep:str(value.nextStep,"nextStep",500),
+    instrumentationPlan:{
+      status:instrumentationStatus as PrReview["instrumentationPlan"]["status"],
+      eventName:planEvent,
+      trigger:str(instrumentationPlan.trigger,"instrumentationPlan.trigger",300),
+      properties,
+      recommendation:str(instrumentationPlan.recommendation,"instrumentationPlan.recommendation",700)
+    },
+    implementationPlan:{
+      status:implementationStatus as PrReview["implementationPlan"]["status"],
+      summary:str(implementation.summary,"implementationPlan.summary",700),
+      steps:list(implementation.steps,"implementationPlan.steps",6),
+      tests:list(implementation.tests,"implementationPlan.tests",6),
+      patch:patch==="No patch generated."?"":patch,
+      patchNote
+    }
   };
 }
