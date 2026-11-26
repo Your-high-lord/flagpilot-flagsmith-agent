@@ -175,3 +175,5 @@ FlagPilot uses Gemini for natural-language proposal generation, GitHub Actions f
 
 
 **Measurement window:** `timeframeDays` is a planning/reporting value only. Flagsmith does not receive an automatic end date from this workflow, and FlagPilot does not yet schedule a stop. An operator must monitor and complete/stop the experiment separately. The dashboard must not describe this as an automatically enforced duration.
+
+**Instrumentation scanner limits:** Source evidence is accepted only for executable, case-sensitive `trackEvent` calls on the official Flagsmith SDK or standard browser global. Only immutable `const` aliases are followed. Type-only imports, mutable aliases, detected direct/computed/reflective `trackEvent` mutations, and files with syntax or semantic diagnostics cannot establish positive evidence. This conservative static scan is not runtime proof; human event-delivery verification remains mandatory.
