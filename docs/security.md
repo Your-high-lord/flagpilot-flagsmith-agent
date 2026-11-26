@@ -20,3 +20,8 @@
 - The promotion workflow re-fetches the source PR before preparing the proposal and again after the protected `flagsmith-create` approval, immediately before provisioning. Closed or changed PRs are rejected.
 - The source review artifact must come from a successful run of the FlagPilot PR-review workflow on the default branch. The artifact is downloaded by run ID rather than from the mutable latest-report page.
 - Browser code never receives `FLAGSMITH_API_KEY`. The only browser credential is the user-provided, repository-scoped GitHub token used to request GitHub Actions workflows and read workflow status.
+
+- Deterministic instrumentation checks use the TypeScript AST parser and accept only case-sensitive `trackEvent("event")` calls on an official `@flagsmith/flagsmith` imported client, an instance created by `createFlagsmithInstance`, or the documented `window.flagsmith` global. Comments, strings, generic tracking methods, unrelated objects, dynamic event arguments, unsupported languages and syntax errors do not count as verified calls.
+- Existing experiment reuse is read-back gated: feature and variation identity, exact metric, expected direction, hypothesis, created status, enabled rollout percentage, control value, treatment option/allocation and all-identities audience must match. Unknown or mismatched configuration fails closed.
+- PR promotions include reviewed head/base SHAs and the approved configuration in the deterministic resource identity. Repeated identical proposals are idempotent; changed commits or settings receive a distinct identity.
+- The measurement window is metadata only. No automatic stop or end-date enforcement is implemented.
