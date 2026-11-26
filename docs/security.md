@@ -26,3 +26,6 @@
 - PR promotions include reviewed head/base SHAs and the approved configuration in the deterministic resource identity. Repeated identical proposals are idempotent; changed commits or settings receive a distinct identity.
 - The measurement window is metadata only. No automatic stop or end-date enforcement is implemented.
 - Newly created project-level features default to disabled. The experiment's rollout is configured only in the selected target environment, avoiding accidental exposure in other environments.
+
+- Instrumentation analysis accepts only runtime imports (not type-only imports) and follows immutable `const` client aliases. Mutable `let`/`var` aliases are not trusted; semantic errors, syntax errors, unsupported files, or incomplete scans fail closed.
+- The scanner invalidates positive evidence when it detects direct/computed assignment, deletion, or reflective replacement of a `trackEvent` property (including `Object.defineProperty`, `Object.defineProperties`, `Object.assign`, `Reflect.set`, and `Reflect.deleteProperty`). This is conservative static analysis, not proof against every possible runtime mutation or dynamic code path.
