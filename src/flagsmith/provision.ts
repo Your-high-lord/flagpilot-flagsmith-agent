@@ -9,25 +9,67 @@ function sameId(v:unknown,id:number){return Number(v)===id;}
 function verifyMetric(m:Record<string,unknown>,p:ExperimentProposal){const d=m.definition;const event=isRecord(d)?d.event:undefined;if(event!==p.metric.eventName||m.aggregation!=="occurrence"||m.direction!=="up")throw new Error("Metric read-back does not match event, occurrence aggregation and increase direction.");}
 function verifyExperiment(e:Record<string,unknown>,p:ExperimentProposal,featureId:number){const actualFeatureId=isRecord(e.feature)?e.feature.id:e.feature;if(!sameId(actualFeatureId,featureId))throw new Error("Experiment read-back points to a different feature.");if(e.name!==p.experimentName)throw new Error("Experiment read-back name differs from approved proposal.");const s=String(e.status??"").toLowerCase();if(s==="running"||s==="active")throw new Error("Experiment is already running; refusing to accept a pre-started experiment.");if(s&&!["created","draft","paused"].includes(s))throw new Error(`Unexpected experiment status '${s}'.`);}
 export async function provisionExperiment(api:FlagsmithApi,p:ExperimentProposal):Promise<ProvisionResult>{
- const ctx=context(),project=requiredEnv("FLAGSMITH_PROJECT_ID"),env=requiredEnv("FLAGSMITH_ENVIRONMENT_KEY");
- const list=parseCliJson(await runFlagsmith(["feature","list",...ctx]));let feature=findFeature(list,p.featureName),featureReused=Boolean(feature);
- if(!feature){await runFlagsmith(["feature","create",p.featureName,"--value","control","--enabled","--description",`FlagPilot experiment: ${p.experimentName}`,...ctx]);const got=parseCliJson(await runFlagsmith(["feature","get",p.featureName,...ctx]));feature=findFeature(got,p.featureName)??(isRecord(got)?got:undefined);}
- if(!feature)throw new Error("Feature creation not confirmed by read-back.");const featureId=idOf(feature,"feature");const raw=feature.default_value??feature.value??feature.initial_value;const def=isRecord(raw)?raw.value:raw;
- if(def!=="control")throw new Error("Feature base value is not exactly 'control'; no overwrite attempted.");if(feature.enabled!==true)throw new Error("Feature is not enabled; no silent update attempted.");
- let detail=parseCliJson(await runFlagsmith(["feature","get",p.featureName,...ctx]));let variant=findVariant(detail,p.treatment.key),variantReused=Boolean(variant);
- if(variant){if(String(variant.value)!==p.treatment.value)throw new Error("Existing treatment key has a different value.");if(variant.weight!==undefined&&Number(variant.weight)!==0)throw new Error("Existing treatment key has non-zero default weight.");}
- else{await runFlagsmith(["feature","variant","add",p.featureName,"--value",p.treatment.value,"--key",p.treatment.key,"--weight","0",...ctx]);detail=parseCliJson(await runFlagsmith(["feature","get",p.featureName,...ctx]));variant=findVariant(detail,p.treatment.key);}
- if(!variant)throw new Error("Treatment variation not confirmed by read-back.");const variantId=idOf(variant,"variation");
+ const ctx=context(),projectId=Number(requiredEnv("FLAGSMITH_PROJECT_ID")),env=requiredEnv("FLAGSMITH_ENVIRONMENT_KEY");
+ if(!Number.isSafeInteger(projectId)||projectId<=0)throw new Error("FLAGSMITH_PROJECT_ID must be a positive numeric project ID.");
+ const list=parseCliJson(await runFlagsmith(["feature","list",...ctx]));
+ let feature=findFeature(list,p.featureName),featureReused=Boolean(feature);
+ let featureId:number,projectFeature:Record<string,unknown>;
+ if(feature){
+  featureId=idOf(feature,"feature");
+  const raw=await api.getProjectFeature(projectId,featureId);
+  if(!isRecord(raw))throw new Error("Flagsmith project feature read-back did not return an object.");
+  projectFeature=raw;
+  if(projectFeature.type!=="MULTIVARIATE")throw new Error("A feature with this name already exists but is not MULTIVARIATE. FlagPilot will not silently convert or overwrite an existing feature.");
+ }else{
+  const raw=await api.createProjectFeature(projectId,{
+   name:p.featureName,
+   type:"MULTIVARIATE",
+   initial_value:"control",
+   default_enabled:true,
+   description:`FlagPilot experiment: ${p.experimentName}`
+  });
+  if(!isRecord(raw))throw new Error("Flagsmith did not return the created multivariate feature.");
+  featureId=idOf(raw,"feature");
+  const confirmed=await api.getProjectFeature(projectId,featureId);
+  if(!isRecord(confirmed))throw new Error("New feature could not be verified through the Management API.");
+  projectFeature=confirmed;
+ }
+ if(projectFeature.type!=="MULTIVARIATE")throw new Error("Feature read-back is not MULTIVARIATE; experiment creation would be rejected.");
+ if(projectFeature.initial_value!=="control")throw new Error("Feature initial value is not exactly 'control'; no overwrite attempted.");
+ if(projectFeature.default_enabled!==true)throw new Error("Feature is not enabled by default; no silent update attempted.");
+
+ let detail=parseCliJson(await runFlagsmith(["feature","get",p.featureName,...ctx]));
+ let variant=findVariant(detail,p.treatment.key),variantReused=Boolean(variant);
+ if(variant){
+  if(String(variant.value)!==p.treatment.value)throw new Error("Existing treatment key has a different value.");
+  if(variant.weight!==undefined&&Number(variant.weight)!==0)throw new Error("Existing treatment key has non-zero default weight.");
+ }else{
+  const raw=await api.createFeatureVariant(projectId,featureId,{
+   feature:featureId,
+   type:"unicode",
+   string_value:p.treatment.value,
+   default_percentage_allocation:0,
+   key:p.treatment.key
+  });
+  if(!isRecord(raw))throw new Error("Flagsmith did not return the created treatment variation.");
+  if(String(raw.string_value)!==p.treatment.value||raw.key!==p.treatment.key||Number(raw.default_percentage_allocation)!==0)throw new Error("Treatment variation response did not match the approved proposal.");
+  detail=parseCliJson(await runFlagsmith(["feature","get",p.featureName,...ctx]));
+  variant=findVariant(detail,p.treatment.key);
+ }
+ if(!variant)throw new Error("Treatment variation not confirmed by CLI read-back.");
+ const variantId=idOf(variant,"variation");
+ if(String(variant.value)!==p.treatment.value)throw new Error("Treatment variation read-back value does not match the approved proposal.");
+
  const metrics=await api.experimentMetrics();let metric=findName(metrics,p.metric.name),metricReused=Boolean(metric);
  if(metric){const d=metric.definition;const event=isRecord(d)?d.event:undefined;if(event!==p.metric.eventName||metric.aggregation!=="occurrence"||metric.direction!=="up")throw new Error("Same metric name exists with mismatched configuration.");}
  else metric=await api.createMetric({name:p.metric.name,aggregation:"occurrence",direction:"up",definition:{version:1,event:p.metric.eventName}}) as Record<string,unknown>;
  const metricId=idOf(metric,"metric");const metricRead=await api.getMetric(metricId);if(!isRecord(metricRead))throw new Error("Metric read-back did not return an object.");verifyMetric(metricRead,p);
  const experiments=await api.experiments();let experiment=findName(experiments,p.experimentName),experimentReused=Boolean(experiment);
- if(experiment){if(!sameId(experiment.feature,featureId))throw new Error("Experiment name exists but references a different feature.");}
+ if(experiment){const existingFeatureId=isRecord(experiment.feature)?experiment.feature.id:experiment.feature;if(!sameId(existingFeatureId,featureId))throw new Error("Experiment name exists but references a different feature.");}
  else experiment=await api.createExperiment({feature:featureId,name:p.experimentName,hypothesis:p.hypothesis,metrics:[{metric:metricId,expected_direction:"increase"}],experiment_rollout:{enabled:true,rollout_percentage:p.rolloutPercentage,feature_state_value:{type:"string",value:"control"},multivariate_feature_state_values:[{multivariate_feature_option:variantId,percentage_allocation:p.treatment.allocation}]}}) as Record<string,unknown>;
  const experimentId=idOf(experiment,"experiment");const experimentRead=await api.getExperiment(experimentId);if(!isRecord(experimentRead))throw new Error("Experiment read-back did not return an object.");verifyExperiment(experimentRead,p,featureId);
  const linked=asList(experimentRead.metrics);const linkedMetric=linked.find(x=>sameId(x.metric,metricId));if(!linkedMetric)throw new Error("Experiment read-back does not show the requested metric attached.");
  if(linkedMetric.expected_direction!==undefined&&linkedMetric.expected_direction!=="increase")throw new Error("Experiment primary metric direction does not match.");
- return{feature:{id:featureId,name:p.featureName,url:dashboard(project,env,"features",featureId)},treatment:{id:variantId,key:p.treatment.key,value:p.treatment.value,allocation:p.treatment.allocation},metric:{id:metricId,name:p.metric.name,eventName:p.metric.eventName},experiment:{id:experimentId,name:p.experimentName,status:String(experimentRead.status??"created"),url:dashboard(project,env,"experiments",experimentId)},reused:{feature:featureReused,variant:variantReused,metric:metricReused,experiment:experimentReused}};
+ return{feature:{id:featureId,name:p.featureName,url:dashboard(projectId.toString(),env,"features",featureId)},treatment:{id:variantId,key:p.treatment.key,value:p.treatment.value,allocation:p.treatment.allocation},metric:{id:metricId,name:p.metric.name,eventName:p.metric.eventName},experiment:{id:experimentId,name:p.experimentName,status:String(experimentRead.status??"created"),url:dashboard(projectId.toString(),env,"experiments",experimentId)},reused:{feature:featureReused,variant:variantReused,metric:metricReused,experiment:experimentReused}};
 }
 export function readProposal(v:unknown):ExperimentProposal{if(!isRecord(v)||!isRecord(v.proposal))throw new Error("Plan artifact is missing proposal.");return validateProposal(v.proposal);}
