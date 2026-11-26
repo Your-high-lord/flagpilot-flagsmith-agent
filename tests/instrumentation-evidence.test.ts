@@ -111,8 +111,8 @@ test("rejects Object.assign replacement of trackEvent",()=>{
  const r=scan('import flagsmith from "@flagsmith/flagsmith"; declare const otherService:any; Object.assign(flagsmith,{trackEvent:otherService.sendEvent}); flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
 });
-test("semantic diagnostics make source evidence incomplete",()=>{
- const r=scan('import flagsmith from "@flagsmith/flagsmith"; const broken: MissingType = 1; flagsmith.trackEvent("CheckoutStarted");');
+test("semantic diagnostics reject type-only SDK imports used as runtime values",()=>{
+ const r=scan('import type flagsmith from "@flagsmith/flagsmith"; flagsmith.trackEvent("CheckoutStarted");');
  assert.equal(r.status,"incomplete");assert.equal(r.trackingCallFound,false);
 });
 
