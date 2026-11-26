@@ -63,8 +63,13 @@ function hasTrackEventMutation(sourceFile:ts.SourceFile):boolean{
       const keyArg=args[1];
       const keyIsTrackEvent=!!keyArg&&(ts.isStringLiteral(keyArg)||ts.isNoSubstitutionTemplateLiteral(keyArg))&&keyArg.text==="trackEvent";
       const globalObject=ts.isIdentifier(receiver)&&["Object","Reflect"].includes(receiver.text);
+      const descriptorMapHasTrackEvent=!!keyArg&&ts.isObjectLiteralExpression(unwrap(keyArg))&&
+        (unwrap(keyArg) as ts.ObjectLiteralExpression).properties.some(property=>
+          (ts.isPropertyAssignment(property)||ts.isMethodDeclaration(property)||ts.isGetAccessorDeclaration(property)||ts.isSetAccessorDeclaration(property))&&
+          (ts.isIdentifier(property.name)||ts.isStringLiteral(property.name)||ts.isNumericLiteral(property.name))&&property.name.text==="trackEvent");
       if(globalObject&&(
-        ((method==="defineProperty"||method==="defineProperties"||method==="set")&&keyIsTrackEvent)||
+        ((method==="defineProperty"||method==="set"||method==="deleteProperty")&&keyIsTrackEvent)||
+        (method==="defineProperties"&&descriptorMapHasTrackEvent)||
         (method==="assign"&&args.slice(1).some(arg=>{
           const value=unwrap(arg);
           return ts.isObjectLiteralExpression(value)&&value.properties.some(property=>
