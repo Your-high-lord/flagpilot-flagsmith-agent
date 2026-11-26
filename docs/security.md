@@ -25,3 +25,4 @@
 - Existing experiment reuse is read-back gated: feature and variation identity, exact metric, expected direction, hypothesis, created status, enabled rollout percentage, control value, treatment option/allocation and all-identities audience must match. Unknown or mismatched configuration fails closed.
 - PR promotions include reviewed head/base SHAs and the approved configuration in the deterministic resource identity. Repeated identical proposals are idempotent; changed commits or settings receive a distinct identity.
 - The measurement window is metadata only. No automatic stop or end-date enforcement is implemented.
+- Newly created project-level features default to disabled. The experiment's rollout is configured only in the selected target environment, avoiding accidental exposure in other environments.
