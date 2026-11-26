@@ -1,0 +1,80 @@
+name: FlagPilot · Plan and provision experiment
+on:
+  workflow_dispatch:
+    inputs:
+      experiment_request:
+        description: Describe the experiment, variants and what counts as success
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: flagpilot-provision-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  plan:
+    name: AI plan (no Flagsmith writes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Generate structured experiment proposal
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
+          EXPERIMENT_REQUEST: ${{ inputs.experiment_request }}
+        run: npm run plan
+      - name: Upload AI proposal
+        uses: actions/upload-artifact@v4
+        with:
+          name: flagpilot-plan
+          path: artifacts/plan.json
+          if-no-files-found: error
+          retention-days: 3
+  create:
+    name: Create feature, metric and draft experiment
+    needs: [plan]
+    runs-on: ubuntu-latest
+    environment:
+      name: flagsmith-create
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Run read-only Flagsmith preflight
+        env:
+          FLAGSMITH_API_KEY: ${{ secrets.FLAGSMITH_API_KEY }}
+          FLAGSMITH_API_URL: https://api.flagsmith.com
+          FLAGSMITH_ENVIRONMENT_KEY: ${{ vars.FLAGSMITH_ENVIRONMENT_KEY }}
+        run: npm run preflight
+      - name: Install Flagsmith CLI v2
+        uses: Flagsmith/setup-cli@c7154aaa37dff8aca0b66afc1e6722e7ad00c115 # v1.0.0
+        with:
+          cli-version: v2.0.0
+      - name: Download AI proposal
+        uses: actions/download-artifact@v4
+        with:
+          name: flagpilot-plan
+          path: artifacts
+      - name: Provision real Flagsmith resources
+        env:
+          FLAGSMITH_API_KEY: ${{ secrets.FLAGSMITH_API_KEY }}
+          FLAGSMITH_API_URL: https://api.flagsmith.com
+          FLAGSMITH_ORGANISATION: ${{ vars.FLAGSMITH_ORGANISATION }}
+          FLAGSMITH_PROJECT: ${{ vars.FLAGSMITH_PROJECT }}
+          FLAGSMITH_PROJECT_ID: ${{ vars.FLAGSMITH_PROJECT_ID }}
+          FLAGSMITH_ENVIRONMENT_KEY: ${{ vars.FLAGSMITH_ENVIRONMENT_KEY }}
+          FLAGSMITH_ENVIRONMENT: ${{ vars.FLAGSMITH_ENVIRONMENT_KEY }}
+        run: npm run provision
+      - name: Upload provisioning report
+        uses: actions/upload-artifact@v4
+        with:
+          name: flagpilot-provision-result
+          path: artifacts/provision-result.json
+          if-no-files-found: error
+          retention-days: 7
