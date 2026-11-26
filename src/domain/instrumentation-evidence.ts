@@ -63,6 +63,12 @@ function hasTrackEventMutation(sourceFile:ts.SourceFile):boolean{
       const keyArg=args[1];
       const keyIsTrackEvent=!!keyArg&&(ts.isStringLiteral(keyArg)||ts.isNoSubstitutionTemplateLiteral(keyArg))&&keyArg.text==="trackEvent";
       const globalObject=ts.isIdentifier(receiver)&&["Object","Reflect"].includes(receiver.text);
+      // Dynamic reflective mutation cannot be resolved reliably in a bounded,
+      // source-only scan. Conservatively invalidate positive evidence for these APIs.
+      if(globalObject&&(
+        (receiver as ts.Identifier).text==="Object"&&["defineProperty","defineProperties","assign","setPrototypeOf"].includes(method)||
+        (receiver as ts.Identifier).text==="Reflect"&&["set","deleteProperty","defineProperty","setPrototypeOf"].includes(method)
+      ))mutated=true;
       const descriptorMapHasTrackEvent=!!keyArg&&ts.isObjectLiteralExpression(unwrap(keyArg))&&
         (unwrap(keyArg) as ts.ObjectLiteralExpression).properties.some(property=>
           (ts.isPropertyAssignment(property)||ts.isMethodDeclaration(property)||ts.isGetAccessorDeclaration(property)||ts.isSetAccessorDeclaration(property))&&
@@ -142,7 +148,7 @@ export function scanInstrumentationEvidence(input:{
     const syntactic=program.getSyntacticDiagnostics(sourceFile);
     const semantic=program.getSemanticDiagnostics(sourceFile);
     // Fail closed on semantic errors that mean a type-only binding is used as a runtime value.
-    const runtimeImportErrors=semantic.filter(diagnostic=>[1361,1362,1363,1364,1365,2588,2693].includes(diagnostic.code));
+    const runtimeImportErrors=semantic.filter(diagnostic=>[1361,1362,1363,1364,1365,2588,2632,2693].includes(diagnostic.code));
     if(syntactic.length>0||runtimeImportErrors.length>0){failedFiles.add(entry.path);continue;}
     if(hasTrackEventMutation(sourceFile))sdkMethodMutated=true;
 
