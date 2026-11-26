@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {prepareProposalFromReview} from "../src/domain/pr-review-promotion.js";
 const repositoryFullName="Your-high-lord/flagpilot-flagsmith-agent";
 const changedFiles=["src/components/Checkout.tsx"];
+const headSha="a".repeat(40),baseSha="b".repeat(40);
+const sourceEvidence={status:"verified_call_found" as const,eventName:"checkout_started",sourceSha:headSha,scannedFiles:1,failedFiles:[],eventLiteralFound:true,trackingCallFound:true,matches:[{file:"src/components/Checkout.tsx",line:20,api:"trackevent"}],note:"Source code only; delivery is not verified."};
 const goodReview={
   verdict:"ready_for_experiment",
   changeSummary:"The PR adds a new checkout CTA option.",
@@ -23,13 +25,13 @@ const goodReview={
   implementationPlan:{status:"manual_review_required",summary:"Review the current SDK binding before changing the CTA code.",steps:["Inspect the existing Flagsmith provider.","Add the approved flag check around the label only."],tests:["Control shows the current label.","Treatment shows the alternative label."],patch:"",patchNote:"A manual code review is required before applying the feature flag."}
 };
 function report(review:unknown=goodReview,overrides:Record<string,unknown>={}){return{
-  pullRequest:{url:"https://github.com/acme/shop/pull/42",title:"Improve checkout CTA copy",changedFiles},
+  pullRequest:{url:"https://github.com/acme/shop/pull/42",title:"Improve checkout CTA copy",changedFiles,reportedChangedFileCount:changedFiles.length,truncated:false,headSha,baseSha},
   review,
   createdAt:"2026-11-27T00:00:00.000Z",
   workflowRunUrl:`https://github.com/${repositoryFullName}/actions/runs/12345`,
   ...overrides
 };}
-const options={reviewRunId:12345,repositoryFullName,rolloutPercentage:10,timeframeDays:7};
+const options={reviewRunId:12345,repositoryFullName,rolloutPercentage:10,timeframeDays:7,currentHeadSha:headSha,currentBaseSha:baseSha,sourceEvidence};
 test("converts an eligible PR review into a deterministic Flagsmith experiment proposal",()=>{
   const result=prepareProposalFromReview(report(),options);
   assert.match(result.proposal.featureName,/^fp_checkout_cta_copy_[a-f0-9]{6}$/);
@@ -40,6 +42,8 @@ test("converts an eligible PR review into a deterministic Flagsmith experiment p
   assert.equal(result.proposal.treatment.allocation,50);
   assert.equal(result.proposal.metric.eventName,"checkout_started");
   assert.equal(result.source.reviewRunId,12345);
+  assert.equal(result.source.instrumentationStatus,"source_call_found");
+  assert.equal(result.source.sourceHeadSha,headSha);
 });
 test("refuses a PR review that says not a good experiment",()=>assert.throws(()=>prepareProposalFromReview(report({...goodReview,verdict:"not_a_good_experiment"}),options),/Only ready_for_experiment reviews/));
 test("refuses a PR review that needs engineering work",()=>assert.throws(()=>prepareProposalFromReview(report({...goodReview,verdict:"needs_engineering_work"}),options),/Only ready_for_experiment reviews/));
@@ -53,3 +57,12 @@ test("validates rollout and measurement window",()=>{
   assert.throws(()=>prepareProposalFromReview(report(),{...options,rolloutPercentage:0}),/rolloutPercentage/);
   assert.throws(()=>prepareProposalFromReview(report(),{...options,timeframeDays:91}),/timeframeDays/);
 });
+
+test("refuses a truncated report",()=>assert.throws(()=>prepareProposalFromReview(report(goodReview,{pullRequest:{...report().pullRequest,truncated:true}}),options),/diff was truncated/));
+test("refuses incomplete changed-file counts",()=>assert.throws(()=>prepareProposalFromReview(report(goodReview,{pullRequest:{...report().pullRequest,reportedChangedFileCount:2}}),options),/changed-file count is incomplete/));
+test("refuses a stale PR head commit",()=>assert.throws(()=>prepareProposalFromReview(report(),{...options,currentHeadSha:"c".repeat(40)}),/changed after review/));
+test("refuses a stale PR base commit",()=>assert.throws(()=>prepareProposalFromReview(report(),{...options,currentBaseSha:"c".repeat(40)}),/changed after review/));
+test("refuses missing deterministic source-call evidence",()=>assert.throws(()=>prepareProposalFromReview(report(),{...options,sourceEvidence:{...sourceEvidence,status:"event_literal_only",matches:[]}}),/deterministic source evidence/));
+test("refuses source evidence scanned at another commit",()=>assert.throws(()=>prepareProposalFromReview(report(),{...options,sourceEvidence:{...sourceEvidence,sourceSha:"c".repeat(40)}}),/deterministic source evidence/));
+test("refuses source evidence for a different event",()=>assert.throws(()=>prepareProposalFromReview(report(),{...options,sourceEvidence:{...sourceEvidence,eventName:"page_view"}}),/deterministic source evidence/));
+test("refuses incomplete source scans",()=>assert.throws(()=>prepareProposalFromReview(report(),{...options,sourceEvidence:{...sourceEvidence,failedFiles:["src/other.ts"]}}),/deterministic source evidence/));
