@@ -22,8 +22,10 @@ codeTargets [0-5 {file (must exactly match one of the changed filenames),reason,
 risks (array of concrete risks),
 approvalQuestions (array of questions a human must resolve),
 manualStepsSaved (integer 0-20; conservative estimate),
-nextStep (one practical next action).
-Do not claim instrumentation exists unless the diff proves it. If the event is not present in the diff, mark missing or unclear. The current behavior must remain the safe control default. The output is a proposal only; do not claim Flagsmith was changed or an experiment was created.`;
+nextStep (one practical next action),
+instrumentationPlan {status:"verified"|"missing"|"unclear",eventName (must exactly equal metric.eventName),trigger,properties (array of up to 6 useful event properties),recommendation},
+implementationPlan {status:"patch_ready"|"manual_review_required"|"not_applicable",summary,steps (up to 6),tests (up to 6),patch (unified diff or empty string),patchNote}.
+PATCH SAFETY: Generate a patch only when the supplied PR diff proves the exact code path AND the exact Flagsmith SDK/hook/API already used in that repository. Never invent a function name, import, client initialization, environment variable or SDK method. A patch may modify exactly one file already in changedFiles. If SDK integration context is absent or correctness cannot be established, use manual_review_required and an empty patch; explain what source/context must be inspected. If no safe experiment applies, use not_applicable. Do not change authentication, permissions, payment, eligibility or deletion logic. Keep current behavior as the safe control. Do not claim instrumentation exists unless the diff proves it. This is a proposal only; do not claim the PR or Flagsmith was changed.`;
 
 const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 const RETRYABLE_HTTP=new Set([408,425,429,500,502,503,504]);
