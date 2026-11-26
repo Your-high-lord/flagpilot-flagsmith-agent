@@ -20,7 +20,7 @@ export class FlagsmithApi{
   for(let page=0;page<100;page++){
    const url=new URL(next);
    const base=new URL(this.baseUrl);
-   if(url.protocol!=="https:"||url.origin!==base.origin||!url.pathname.startsWith("/api/v1/"))throw new Error("Flagsmith pagination returned an unsafe next-page URL; refusing to forward credentials.");
+   if(url.protocol!==base.protocol||url.origin!==base.origin||!url.pathname.startsWith("/api/v1/"))throw new Error("Flagsmith pagination returned an unsafe next-page URL; refusing to forward credentials.");
    if(seen.has(url.href))throw new Error("Flagsmith pagination repeated a page URL; refusing an incomplete list.");
    seen.add(url.href);
    const data=await this.request<unknown>(url.href,"GET");
