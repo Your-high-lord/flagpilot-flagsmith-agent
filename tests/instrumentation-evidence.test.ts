@@ -115,3 +115,16 @@ test("semantic diagnostics make source evidence incomplete",()=>{
  const r=scan('import flagsmith from "@flagsmith/flagsmith"; const broken: MissingType = 1; flagsmith.trackEvent("CheckoutStarted");');
  assert.equal(r.status,"incomplete");assert.equal(r.trackingCallFound,false);
 });
+
+test("rejects Object.defineProperties replacement of trackEvent",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; Object.defineProperties(flagsmith,{trackEvent:{value:otherService.sendEvent}}); flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects Reflect.set replacement of trackEvent",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; Reflect.set(flagsmith,"trackEvent",otherService.sendEvent); flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects Reflect.deleteProperty removal of trackEvent",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; Reflect.deleteProperty(flagsmith,"trackEvent"); flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
