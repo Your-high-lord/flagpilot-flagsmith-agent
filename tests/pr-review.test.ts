@@ -16,5 +16,18 @@ test("accepts an implementation plan without inventing an SDK patch",()=>assert.
 test("rejects a patch that targets a file outside the PR",()=>assert.throws(()=>validatePrReview({...good,implementationPlan:{...good.implementationPlan,status:"patch_ready",patch:"--- a/src/secrets.ts\\n+++ b/src/secrets.ts\\n@@ -1 +1 @@\\n-old\\n+new"}},files),/exactly one file/));
 test("requires instrumentation event to match primary metric",()=>assert.throws(()=>validatePrReview({...good,instrumentationPlan:{...good.instrumentationPlan,eventName:"other_event"}},files),/must match/));
 
-test("accepts a unified patch limited to one changed file",()=>assert.equal(validatePrReview({...good,implementationPlan:{...good.implementationPlan,status:"patch_ready",patch:"--- a/src/components/Checkout.tsx\\n+++ b/src/components/Checkout.tsx\\n@@ -1 +1 @@\\n-old\\n+new"}},files).implementationPlan.status,"patch_ready"));
-test("rejects patches that touch more than one changed file",()=>assert.throws(()=>validatePrReview({...good,implementationPlan:{...good.implementationPlan,status:"patch_ready",patch:"--- a/src/components/Checkout.tsx\\n+++ b/src/components/Checkout.tsx\\n@@ -1 +1 @@\\n-old\\n+new\\n--- a/src/analytics.ts\\n+++ b/src/analytics.ts\\n@@ -1 +1 @@\\n-old\\n+new"}},files),/exactly one file/));
+test("accepts a unified patch limited to one changed file",()=>assert.equal(validatePrReview({...good,implementationPlan:{...good.implementationPlan,status:"patch_ready",patch:`--- a/src/components/Checkout.tsx
++++ b/src/components/Checkout.tsx
+@@ -1 +1 @@
+-old
++new`}},files).implementationPlan.status,"patch_ready"));
+test("rejects patches that touch more than one changed file",()=>assert.throws(()=>validatePrReview({...good,implementationPlan:{...good.implementationPlan,status:"patch_ready",patch:`--- a/src/components/Checkout.tsx
++++ b/src/components/Checkout.tsx
+@@ -1 +1 @@
+-old
++new
+--- a/src/analytics.ts
++++ b/src/analytics.ts
+@@ -1 +1 @@
+-old
++new`}},files),/exactly one file/));
