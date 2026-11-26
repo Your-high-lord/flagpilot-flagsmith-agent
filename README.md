@@ -30,8 +30,7 @@ FlagPilot turns a natural-language experiment request into a validated proposal,
 
 ### 1. Create the GitHub repository
 
-Create a **public** repository named `flagpilot-flagsmith-agent`. The competition repository and source code must start after the official kickoff. Do not reuse the ASIR.INFRA practice project or its code.
-
+Create a **public** repository named `flagpilot-flagsmith-agent`. The competition repository and source code must start after the official kickoff. 
 ### 2. Create protected environments and add the management secret
 
 In **Settings → Environments**, create `flagsmith-create` and `flagsmith-start`. Add your GitHub account as a required reviewer for both, restrict deployments to `main`, and disable **Prevent self-review** so a solo participant can approve their own deployment.
