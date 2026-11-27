@@ -219,7 +219,7 @@ test("controlled store demo sends the exact fixed synthetic conversion event onl
   assert.equal(await page.locator("#event-name").isEditable(),false);
   await page.locator("#environment-key").fill("public-development-sdk-key");
   await page.locator("#connect-form button[type=submit]").click();
-  await page.locator("#connection-badge").waitFor();
+  await page.getByText("ENROLLED",{exact:true}).waitFor();
   assert.equal(await page.locator("#connection-badge").innerText(),"ENROLLED");
   await page.locator("#conversion-button").click();
   await page.getByText("One synthetic conversion attempt 'demo_signup_completed' was flushed").waitFor();
