@@ -25,30 +25,31 @@ const raw=JSON.parse(await readFile(artifactPath,"utf8")) as unknown;
 const artifact=validateProvisioningArtifact(raw,{projectId,environmentKey,experimentId:id});
 const api=new FlagsmithApi({apiKey,environmentKey,...(process.env.FLAGSMITH_API_URL?{apiUrl:process.env.FLAGSMITH_API_URL}:{})});
 
-// Verify the project-level feature remains disabled outside the selected experiment rollout.
-const feature=await api.getProjectFeature(projectId,artifact.result.feature.id);
-if(!isRecord(feature)||Number(feature.id)!==artifact.result.feature.id||feature.name!==artifact.result.feature.name||feature.type!=="MULTIVARIATE"||feature.initial_value!=="control"||feature.default_enabled!==false) {
-  throw new Error("The provisioned feature no longer matches its identity or safe project-level defaults. Refusing to start.");
-}
-const variations=Array.isArray(feature.multivariate_options)?feature.multivariate_options.filter(isRecord):[];
-const treatment=variations.find(option=>Number(option.id)===artifact.result.treatment.id);
-if(!treatment||treatment.key!==artifact.result.treatment.key||treatment.string_value!==artifact.result.treatment.value||treatment.default_percentage_allocation!==0) {
-  throw new Error("The treatment variation identity, value or project-level default allocation changed after provisioning. Refusing to start.");
-}
-
-// Re-read the live experiment after the flagsmith-start approval and compare every
-// material configuration field with the immutable successful provisioning artifact.
-const experiment=await api.getExperiment(id);
-if(!isRecord(experiment))throw new Error("Flagsmith did not return the selected experiment.");
-verifyExistingExperimentConfiguration({
-  experiment,
-  proposal:artifact.proposal,
-  featureId:artifact.result.feature.id,
-  treatmentOptionId:artifact.result.treatment.id,
-  metricId:artifact.result.metric.id,
-  allowedStatuses:["created","draft"]
+// The helper's final live experiment read is passed through this callback.
+// Validate the experiment, project-level feature and treatment immediately before
+// the single start write; any drift aborts without changing Flagsmith.
+const result=await startExperiment(api,id,{
+  allowedStatuses:["created","draft"],
+  validateBeforeStart:async experiment=>{
+    verifyExistingExperimentConfiguration({
+      experiment,
+      proposal:artifact.proposal,
+      featureId:artifact.result.feature.id,
+      treatmentOptionId:artifact.result.treatment.id,
+      metricId:artifact.result.metric.id,
+      allowedStatuses:["created","draft"]
+    });
+    const feature=await api.getProjectFeature(projectId,artifact.result.feature.id);
+    if(!isRecord(feature)||Number(feature.id)!==artifact.result.feature.id||feature.name!==artifact.result.feature.name||feature.type!=="MULTIVARIATE"||feature.initial_value!=="control"||feature.default_enabled!==false) {
+      throw new Error("The provisioned feature no longer matches its identity or safe project-level defaults. Refusing to start.");
+    }
+    const variations=Array.isArray(feature.multivariate_options)?feature.multivariate_options.filter(isRecord):[];
+    const treatment=variations.find(option=>Number(option.id)===artifact.result.treatment.id);
+    if(!treatment||treatment.key!==artifact.result.treatment.key||treatment.string_value!==artifact.result.treatment.value||treatment.default_percentage_allocation!==0) {
+      throw new Error("The treatment variation identity, value or project-level default allocation changed after provisioning. Refusing to start.");
+    }
+  }
 });
-const result=await startExperiment(api,id,{allowedStatuses:["created","draft"]});
 const summary=[
   "## FlagPilot · Verified experiment start",
   "- **Provisioning run:** "+required("PROVISION_RUN_ID"),
