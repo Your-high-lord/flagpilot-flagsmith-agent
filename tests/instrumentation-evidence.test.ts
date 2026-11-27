@@ -71,6 +71,14 @@ test("partial source scan remains incomplete",()=>{
 });
 test("rejects invalid source commit SHAs",()=>assert.throws(()=>scanInstrumentationEvidence({eventName:"CheckoutStarted",sourceSha:"main",files:{"src/a.ts":"x"}}),/40-character Git commit SHA/));
 
+test("rejects SDK method mutation through a mutable alias before direct SDK call",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; declare const fake:any; let client=flagsmith; client.trackEvent=fake; flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects reflective SDK method mutation through a mutable alias",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; declare const fake:any; let client=flagsmith; Reflect.set(client,"trackEvent",fake); flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
 test("rejects a mutable let alias even when initially assigned from Flagsmith",()=>{
  const r=scan('import flagsmith from "@flagsmith/flagsmith"; let client=flagsmith; client.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
