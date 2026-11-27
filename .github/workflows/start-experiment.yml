@@ -22,9 +22,22 @@ concurrency:
   group: flagpilot-start-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  branch-guard:
+    name: Reject non-main workflow dispatches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the protected main branch
+        if: ${{ github.ref != 'refs/heads/main' }}
+        run: |
+          echo "::error::This workflow may only run from refs/heads/main."
+          exit 1
+      - name: Confirm protected main branch
+        if: ${{ github.ref == 'refs/heads/main' }}
+        run: echo "Workflow ref is refs/heads/main."
   verify:
     name: Verify provisioning evidence before start approval
-    if: ${{ inputs.demo_verified == true }}
+    needs: [branch-guard]
+    if: ${{ github.ref == 'refs/heads/main' && inputs.demo_verified == true && needs.branch-guard.result == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       artifact_name: ${{ steps.source.outputs.artifact_name }}
@@ -90,8 +103,8 @@ jobs:
           retention-days: 1
   start:
     name: Start the verified experiment after second human approval
-    needs: [verify]
-    if: ${{ inputs.demo_verified == true }}
+    needs: [branch-guard, verify]
+    if: ${{ github.ref == 'refs/heads/main' && inputs.demo_verified == true && needs.branch-guard.result == 'success' && needs.verify.result == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: flagsmith-start
