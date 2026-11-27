@@ -8,6 +8,7 @@ on:
         type: string
 permissions:
   contents: read
+  pull-requests: read
   pages: write
   id-token: write
 concurrency:
@@ -25,13 +26,15 @@ jobs:
         with:
           node-version: 22
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Analyse PR diff with Gemini
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
           GEMINI_FALLBACK_MODEL: ${{ vars.GEMINI_FALLBACK_MODEL || 'gemini-3.5-flash-lite' }}
           PULL_REQUEST_URL: ${{ inputs.pull_request_url }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PUBLIC_GITHUB_TOKEN: ${{ secrets.PUBLIC_GITHUB_TOKEN }}
         run: npm run review:pr
       - name: Upload PR review report
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
