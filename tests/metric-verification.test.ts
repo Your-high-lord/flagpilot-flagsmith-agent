@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {verifyMetricConfiguration} from "../src/domain/metric-verification.js";
+import {fetchAndVerifyLiveMetric,verifyMetricConfiguration} from "../src/domain/metric-verification.js";
 
 const expected={id:589,name:"Signup completed",eventName:"demo_signup_completed"};
 const metric=()=>({
@@ -47,4 +47,17 @@ test("rejects an invalid expected metric ID",()=>{
   for(const id of [0,-1,1.5,Number.MAX_SAFE_INTEGER+1]) {
     assert.throws(()=>verifyMetricConfiguration(metric(),{...expected,id}),/positive safe integer/);
   }
+});
+
+test("fetches the live metric using the exact artifact metric ID before validating it",async()=>{
+  const requested:number[]=[];
+  const api={async getMetric(id:number){requested.push(id);return metric();}};
+  await fetchAndVerifyLiveMetric(api,expected);
+  assert.deepEqual(requested,[expected.id]);
+});
+test("rejects live metric drift returned by the artifact-bound metric fetch",async()=>{
+  const requested:number[]=[];
+  const api={async getMetric(id:number){requested.push(id);return {...metric(),definition:{version:1,event:"checkout_completed"}};}};
+  await assert.rejects(()=>fetchAndVerifyLiveMetric(api,expected),/event definition/);
+  assert.deepEqual(requested,[expected.id]);
 });
