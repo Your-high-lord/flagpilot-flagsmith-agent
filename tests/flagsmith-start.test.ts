@@ -75,9 +75,9 @@ test("rejects when the post-start status cannot be verified",async()=>{
 });
 
 test("runs final configuration validation against the fresh experiment before writing",async()=>{
- const f=fakeApi(["created","running"]);let validated:Record<string,unknown>|null=null;
- await startExperiment(f.api,596,{...draftOnly,validateBeforeStart:experiment=>{validated=experiment;}});
- assert.equal(validated?.status,"created");assert.equal(f.writes,1);
+ const f=fakeApi(["created","running"]);let validatedStatus:string|undefined;
+ await startExperiment(f.api,596,{...draftOnly,validateBeforeStart:experiment=>{validatedStatus=String(experiment.status);}});
+ assert.equal(validatedStatus,"created");assert.equal(f.writes,1);
 });
 test("aborts without a Flagsmith write when final configuration validation detects drift",async()=>{
  const f=fakeApi(["created"]);
