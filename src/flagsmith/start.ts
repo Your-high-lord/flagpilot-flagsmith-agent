@@ -16,7 +16,7 @@ export async function startExperiment(
   const before=await api.getExperiment(id);
   if(!isRecord(before))throw new Error("Could not read experiment immediately before starting.");
   const previous=String(before.status??"unknown").toLowerCase();
-  const allowed=options.allowedStatuses??["draft","created","stopped","paused"];
+  const allowed=options.allowedStatuses??["created","draft"];
   if(!allowed.includes(previous)) {
     throw new Error(`Experiment is in '${previous}' state. Allowed pre-start states: ${allowed.join(", ")}. Refusing to start.`);
   }
