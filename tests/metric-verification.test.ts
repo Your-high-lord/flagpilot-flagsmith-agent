@@ -20,10 +20,13 @@ test("accepts a numeric-string API ID only when it is the exact safe ID",()=>{
 test("rejects a different live metric ID",()=>{
   assert.throws(()=>verifyMetricConfiguration({...metric(),id:590},expected),/metric ID/);
 });
-test("rejects a missing or malformed metric response",()=>{
-  for(const value of [null,undefined,{},[]]) {
+test("rejects null, undefined and array metric responses",()=>{
+  for(const value of [null,undefined,[]]) {
     assert.throws(()=>verifyMetricConfiguration(value,expected),/read-back did not return an object/);
   }
+});
+test("rejects an object without the expected metric ID",()=>{
+  assert.throws(()=>verifyMetricConfiguration({},expected),/metric ID/);
 });
 test("rejects a different metric name",()=>{
   assert.throws(()=>verifyMetricConfiguration({...metric(),name:"Checkout completed"},expected),/metric name/);
