@@ -140,3 +140,21 @@ test("start request uses explicit provisioning run and experiment IDs instead of
   assert.equal(dispatchBody?.inputs?.demo_verified,"true");
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
+
+test("dashboard hides an older published report after a newer PR review is requested",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{
+   sessionStorage.setItem("flagpilot-review-requested-at",String(Date.parse("2026-11-27T12:00:00.000Z")));
+   sessionStorage.setItem("flagpilot-review-requested-url","https://github.com/example/app/pull/12");
+  });
+  await page.goto(url);
+  await page.getByText(/A newer PR review was requested/).waitFor();
+  assert.equal(await page.locator("#report-actions").isHidden(),true);
+  assert.equal(await page.locator("#review-run-id").inputValue(),"");
+  assert.equal(await page.getByText("Example checkout change").count(),0);
+  assert.equal(await page.locator("#promote-form").count(),1);
+  assert.equal(await page.locator("#promotion-confirm").count(),1);
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
