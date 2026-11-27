@@ -9,7 +9,7 @@
   if(!config.environmentKey||!config.featureName||!config.controlLabel||!config.eventName)throw new Error("Complete all connection fields.");
   // Flagsmith SDK v12.5.0 sends environmentID as the X-Environment-Key HTTP header.
   // Reject hidden Unicode/control characters locally so XMLHttpRequest cannot throw a ByteString error.
-  if(!/^[\\x21-\\x7E]+$/.test(config.environmentKey))throw new Error("The Environment Key contains whitespace, hidden characters or non-ASCII text. Clear the field and copy the Client-side Environment Key directly from Flagsmith → Development → SDK Keys. Paste only the key, without quotes or labels. The value was not sent.");
+  if(!/^[\x21-\x7E]+$/.test(config.environmentKey))throw new Error("The Environment Key contains whitespace, hidden characters or non-ASCII text. Clear the field and copy the Client-side Environment Key directly from Flagsmith → Development → SDK Keys. Paste only the key, without quotes or labels. The value was not sent.");
   if(config.eventName.startsWith("$")||!/^[A-Za-z][A-Za-z0-9_.:-]*$/.test(config.eventName))throw new Error("Event name is invalid or reserved.");
   connected=false;activeConfig=config;$("conversion-button").disabled=true;$("new-visitor").disabled=true;$("connection-error").textContent="";
   text("connection-badge","CONNECTING");$("connection-badge").className="status status-off";text("identity-value",identity);text("result-feature",config.featureName);text("result-value","Loading from Flagsmith…");text("result-exposure","Waiting");text("result-event",config.eventName);
