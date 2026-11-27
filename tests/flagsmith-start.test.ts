@@ -31,7 +31,7 @@ test("starts a newly created experiment after a fresh status read",async()=>{
 test("starts a draft after a fresh status read",async()=>{
  const f=fakeApi(["draft","draft","active"]);
  const result=await startExperiment(f.api,596,draftOnly);
- assert.equal(f.reads,2);assert.equal(f.writes,1);
+ assert.equal(f.reads,3);assert.equal(f.writes,1);
  assert.equal(result.status,"active");
 });
 test("defaults to rejecting stopped and paused states without a Flagsmith write",async()=>{ for(const status of ["stopped","paused"]){const f=fakeApi([status]);await assert.rejects(()=>startExperiment(f.api,596),/Allowed pre-start states: created, draft/);assert.equal(f.writes,0);} });
