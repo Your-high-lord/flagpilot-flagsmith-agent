@@ -33,7 +33,7 @@ FlagPilot turns a natural-language experiment request into a validated proposal,
 Create a **public** repository named `flagpilot-flagsmith-agent`. The competition repository and source code must start after the official kickoff. 
 ### 2. Create protected environments and add the management secret
 
-In **Settings → Environments**, create `flagsmith-create` and `flagsmith-start`. Add your GitHub account as a required reviewer for both, restrict deployments to `main`, and disable **Prevent self-review** so a solo participant can approve their own deployment.
+In **Settings → Environments**, create `flagsmith-create` and `flagsmith-start`. Add an authorized required reviewer for both and restrict deployments to `main`. For a solo owner who must approve their own deployments, disable **Prevent self-review** as an explicit solo-operator exception; when an independent reviewer is available, enable it and have that person approve.
 
 In the `flagsmith-create` environment, add the secret `FLAGSMITH_API_KEY`. Add the same secret to `flagsmith-start`. Do not store this privileged key as an unrestricted repository secret.
 
