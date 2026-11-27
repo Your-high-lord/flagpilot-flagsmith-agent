@@ -129,6 +129,12 @@ test("start request uses explicit provisioning run and experiment IDs instead of
    await route.fulfill({status:404,body:"not found"});
   });
   await page.goto(url);
+  const startFormCopy=await page.locator("#start-form").innerText();
+  assert.match(startFormCopy,/Development client-side Environment Key/);
+  assert.match(startFormCopy,/returns the expected feature value/);
+  assert.match(startFormCopy,/verify experiment exposure and conversion delivery only after the workflow reports that the experiment is running/);
+  assert.match(await page.locator("#start-form .start-warning").innerText(),/A draft cannot record experiment exposure or conversion events/);
+  assert.doesNotMatch(startFormCopy,/tested SDK exposure and conversion-event delivery using a real test identity/);
   await page.locator("#provision-run-id").fill("45912345678");
   await page.locator("#start-experiment-id").fill("98765");
   await page.locator("#demo-verified").check();
