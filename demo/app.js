@@ -21,11 +21,24 @@
   const value=String(flag.value??"");if(!value)throw new Error("Flagsmith returned an empty variation; no fallback was fabricated.");
   const label=value==="control"?config.controlLabel:value;
   $("conversion-button").textContent=label;
-  enrolled=flag.experiment?.inExperiment===true;
-  text("result-value",value);text("result-exposure",enrolled?"Exposure recorded by Flagsmith":"Not enrolled — no exposure recorded");
-  text("connection-badge",enrolled?"ENROLLED":"CONNECTED · NOT ENROLLED");$("connection-badge").className=enrolled?"status status-ready":"status status-off";$("identity-badge").className="status status-ready";
-  connected=true;$("conversion-button").disabled=!enrolled;$("new-visitor").disabled=false;
-  text("conversion-status",enrolled?`Loaded '${label}' and confirmed experiment enrolment.`:`Loaded '${label}', but identity is outside the rollout. Generate another visitor.`);
+  const candidate=flag.experiment;
+  const experiment=candidate&&typeof candidate==="object"&&typeof candidate.id==="number"&&Number.isSafeInteger(candidate.id)&&candidate.id>0&&typeof candidate.name==="string"&&candidate.name.trim().length>0?candidate:null;
+  enrolled=experiment?.inExperiment===true;
+  const hasExperiment=!!experiment;
+  text("result-value",value);
+  text("result-exposure",enrolled
+    ?`Enrolled · ${experiment.name} (#${experiment.id})`
+    :hasExperiment
+      ?`Not enrolled · ${experiment.name} (#${experiment.id})`
+      :"No experiment metadata returned");
+  text("connection-badge",enrolled?"ENROLLED":hasExperiment?"CONNECTED · NOT ENROLLED":"NO ACTIVE EXPERIMENT");
+  $("connection-badge").className=enrolled?"status status-ready":"status status-off";$("identity-badge").className="status status-ready";
+  connected=true;$("conversion-button").disabled=!enrolled;$("new-visitor").disabled=!hasExperiment;
+  text("conversion-status",enrolled
+    ?`Loaded '${label}' and confirmed enrolment in ${experiment.name} (#${experiment.id}).`
+    :hasExperiment
+      ?`Flagsmith returned experiment ${experiment.name} (#${experiment.id}), but this visitor is not enrolled. Confirm the experiment is running in this Development environment and check its rollout/audience before generating another visitor. No conversion can be sent until enrolment is confirmed.`
+      :`The feature connection succeeded and '${label}' was loaded, but Flagsmith returned no experiment metadata. The experiment may still be a draft/not running or may not be linked to this feature in this environment. Verify the experiment is running before generating visitors. No exposure or conversion was recorded.`);
   localStorage.setItem(CONFIG_KEY,JSON.stringify(config));
  }
  async function newVisitor(){identity=`fp-demo-${crypto.randomUUID()}`;localStorage.setItem(STORAGE_KEY,identity);text("identity-value",identity);connected=false;enrolled=false;$("conversion-button").disabled=true;$("new-visitor").disabled=true;if(!activeConfig){text("conversion-status","New synthetic visitor created. Connect Flagsmith to evaluate.");return;}try{await connect(activeConfig);}catch(e){text("connection-error",e instanceof Error?e.message:String(e));text("conversion-status","New identity could not be evaluated.");}}

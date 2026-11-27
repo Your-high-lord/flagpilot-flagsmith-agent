@@ -117,6 +117,8 @@ GitHub Environment approvals still happen on GitHub's protected deployment revie
 
 The store demo validates that the client-side Environment Key contains only printable ASCII before the Flagsmith SDK sends it as `X-Environment-Key`. If a pasted value contains Unicode, invisible characters or whitespace, the page rejects it locally and asks the operator to copy the client-side key directly from Development → SDK Keys. SDK `onError` messages are also shown in the connection panel; never log or share the key itself.
 
+The store demo distinguishes an enabled feature with no experiment metadata from a known experiment whose current identity is not enrolled. In either case conversion tracking stays disabled until the SDK reports `experiment.inExperiment === true`. When experiment metadata is absent, the page asks the operator to verify that the experiment is running and linked to the selected Development environment before generating another visitor.
+
 The original visitor-facing SDK demo is preserved at `store.html`.
 
 ## Run the workflows
@@ -133,7 +135,7 @@ Run **Actions → FlagPilot · Plan and provision experiment → Run workflow**.
 
 Review the AI proposal in the planning job summary and artifact. The protected job pauses at `flagsmith-create`; after you approve, its first step runs the read-only preflight. If preflight fails, the workflow stops before any Flagsmith writes. After provisioning, download `flagpilot-provision-result` and note the feature name, metric event name and experiment ID. The experiment remains a draft.
 
-### C. Instrument and test the demo before starting
+### C. Connect the SDK and verify the feature response before starting
 
 Deploy **Actions → Deploy FlagPilot demo to GitHub Pages**. If Pages is not yet enabled, go to **Settings → Pages → Build and deployment** and choose **GitHub Actions**.
 
@@ -144,11 +146,13 @@ Open the deployed demo. Enter:
 - The control label from the proposal.
 - The exact metric event name from the provisioning report.
 
-Connect, confirm that Flagsmith returns a variation and confirms experiment enrolment, generate another demo visitor and confirm identity stability, then click the demo conversion button. The page uses `getExperimentFlag`, `trackEvent` and `flushEvents`. No organisation Management API key belongs in the page.
+Connect and confirm that Flagsmith returns the expected feature value for the selected Development environment. At this point the experiment is still a draft: do not expect enrolment or exposure metadata, do not generate more visitors to force enrolment, and do not click the conversion button. A draft cannot record experiment exposure or conversion events. No organisation Management API key belongs in the page.
 
 ### D. Start the experiment (separate protected approval)
 
-Only after the demo and events have been smoke-tested, use the dashboard start form or run **Actions → FlagPilot · Start verified experiment**. Supply both the successful provisioning workflow run ID and the experiment ID recorded in that run's artifact; set `demo_verified` to `true`. The workflow accepts only successful manual runs of the approved FlagPilot provisioning workflows on `main`, downloads the exact run's provisioning artifact, and checks that its experiment ID, feature, treatment, metric, project and environment match. Only then does it pause at the protected `flagsmith-start` environment. After that human approval, the start job downloads the verified artifact again, reads the live experiment and project-level feature, and fetches the live metric by the artifact's metric ID as the final configuration read before the start write. It verifies metric ID, exact name, exact case-sensitive `definition.event`, `occurrence` aggregation and `up` direction, alongside the complete draft experiment, feature and treatment configuration. Any drift stops the workflow before the start request; the resulting running status is then read back and verified. An arbitrary experiment ID, an old artifact without target metadata, a different environment, a changed configuration or a non-draft experiment is rejected.
+After confirming that the client-side SDK connects and returns the expected feature value, use the dashboard start form or run **Actions → FlagPilot · Start verified experiment**. The `demo_verified` confirmation means that the Development client-side SDK connection and feature response were checked; it does not mean exposure or conversion delivery was tested. Supply both the successful provisioning workflow run ID and the experiment ID recorded in that run's artifact; set `demo_verified` to `true`. The workflow accepts only successful manual runs of the approved FlagPilot provisioning workflows on `main`, downloads the exact run's provisioning artifact, and checks that its experiment ID, feature, treatment, metric, project and environment match. Only then does it pause at the protected `flagsmith-start` environment. After that human approval, the start job downloads the verified artifact again, reads the live experiment and project-level feature, and fetches the live metric by the artifact's metric ID as the final configuration read before the start write. It verifies metric ID, exact name, exact case-sensitive `definition.event`, `occurrence` aggregation and `up` direction, alongside the complete draft experiment, feature and treatment configuration. Any drift stops the workflow before the start request; the resulting running status is then read back and verified. An arbitrary experiment ID, an old artifact without target metadata, a different environment, a changed configuration or a non-draft experiment is rejected.
+
+After the workflow reports that the experiment is running, refresh the deployed demo and connect again using the same Development environment and feature. Confirm that Flagsmith returns experiment metadata and `inExperiment === true` for an eligible synthetic identity. Only then click the conversion button once; the demo sends the exact `demo_signup_completed` event and calls `flushEvents()`. Verify that the event is visible in Flagsmith and the connected warehouse before reporting delivery as successful. If metadata is present but the identity is not enrolled, check the experiment audience and rollout; do not generate large batches of visitors.
 
 ## Testing
 

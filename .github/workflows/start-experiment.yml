@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       demo_verified:
-        description: Confirm SDK exposure and conversion event delivery were tested
+        description: Confirm the client-side SDK connection and feature response were checked; exposure and conversions require a running experiment
         required: true
         type: boolean
         default: false
