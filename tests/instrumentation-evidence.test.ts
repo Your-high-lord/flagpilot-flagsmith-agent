@@ -170,6 +170,38 @@ test("rejects an Object.assign method alias replacing the browser-global SDK",()
  const r=scan('declare const fake:any; const assign=Object.assign; assign(window,{flagsmith:fake}); window.flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
 });
+test("rejects Reflect[methodName] when methodName is a const set",()=>{
+ const r=scan('declare const fake:any; const methodName="set"; Reflect[methodName](window,"flagsmith",fake); window.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects Object[methodName] when methodName is a const assign",()=>{
+ const r=scan('declare const fake:any; const methodName="assign"; Object[methodName](window,{flagsmith:fake}); window.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects an alias of Reflect[methodName]",()=>{
+ const r=scan('declare const fake:any; const methodName="set"; const replace=Reflect[methodName]; replace(window,"flagsmith",fake); window.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects globalThis[apiName].set when apiName is a const Reflect",()=>{
+ const r=scan('declare const fake:any; const apiName="Reflect"; globalThis[apiName].set(window,"flagsmith",fake); window.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("fails closed for an unknown computed method on verified global Reflect",()=>{
+ const r=scan('declare const fake:any, methodName:string; Reflect[methodName](window,"flagsmith",fake); window.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("fails closed for an unknown computed method on verified global Object",()=>{
+ const r=scan('declare const fake:any, methodName:string; Object[methodName](window,{flagsmith:fake}); window.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("does not reject dynamic computed methods on unrelated objects",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; const unrelated:any={}; const methodName:string="set"; unrelated[methodName](unrelated,"trackEvent",()=>{}); flagsmith.trackEvent("CheckoutStarted");');
+ assert.equal(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,true);
+});
+test("does not reject global Object or Reflect computed methods with unrelated receivers",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; const unrelated:any={}; const objectMethod="assign"; const reflectMethod="set"; Object[objectMethod](unrelated,{x:1}); Reflect[reflectMethod](unrelated,"trackEvent",()=>{}); flagsmith.trackEvent("CheckoutStarted");');
+ assert.equal(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,true);
+});
 test("rejects a computed Reflect.set call",()=>{
  const r=scan('declare const fake:any; Reflect["set"](window,"flagsmith",fake); window.flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);

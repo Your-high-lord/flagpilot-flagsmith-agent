@@ -226,6 +226,12 @@ export function scanInstrumentationEvidence(input:{
       }
       return undefined;
     };
+    const staticallyKnownPropertyName=(node:ts.Expression):string|undefined=>{
+      node=unwrap(node);
+      if(ts.isPropertyAccessExpression(node))return node.name.text;
+      if(ts.isElementAccessExpression(node)&&node.argumentExpression)return literalValueOf(node.argumentExpression);
+      return undefined;
+    };
     const isNamespace=(node:ts.Expression):boolean=>{
       node=unwrap(node);
       if(!ts.isIdentifier(node))return false;
@@ -288,12 +294,11 @@ export function scanInstrumentationEvidence(input:{
     };
     const reflectionApi=(node:ts.Expression,seen=new Set<ts.Symbol>()):"Object"|"Reflect"|undefined=>{
       node=unwrap(node);
-      // Accept Object/Reflect through a verified browser global only. This
-      // covers globalThis.Reflect, window.Reflect, self.Object and literal
-      // computed forms such as globalThis["Reflect"], without trusting
-      // unrelated objects that happen to expose similarly named properties.
+      // Resolve static string expressions, including const identifiers, before
+      // deciding whether a computed property is the trusted global API name.
+      // Unknown computed keys deliberately do not resolve to Object/Reflect.
       if(ts.isPropertyAccessExpression(node)||ts.isElementAccessExpression(node)){
-        const api=propertyName(node);
+        const api=staticallyKnownPropertyName(node);
         if((api==="Object"||api==="Reflect")&&isGlobalObjectAlias(node.expression))return api;
       }
       if(!ts.isIdentifier(node))return undefined;
@@ -331,8 +336,15 @@ export function scanInstrumentationEvidence(input:{
         ?["assign","defineProperty","defineProperties","setPrototypeOf"].includes(method)
         :["set","defineProperty","deleteProperty","setPrototypeOf"].includes(method);
       if(ts.isPropertyAccessExpression(node)||ts.isElementAccessExpression(node)){
-        const api=reflectionApi(node.expression),method=propertyName(node);
-        if(api&&method&&allowed(api,method))return{api,method};
+        const api=reflectionApi(node.expression);
+        const method=staticallyKnownPropertyName(node);
+        if(api){
+          // An unknown dynamic method on a trusted global API is treated as a
+          // possible mutation. Only a statically resolved known method can be
+          // classified more narrowly.
+          if(method===undefined)return{api,method:"*"};
+          if(allowed(api,method))return{api,method};
+        }
       }
       if(!ts.isIdentifier(node))return undefined;
       const symbol=symbolOf(node);
