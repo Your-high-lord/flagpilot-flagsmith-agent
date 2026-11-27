@@ -123,6 +123,7 @@ export function scanInstrumentationEvidence(input:{
   const failedFiles=new Set(input.failedFiles??[]);
   const virtualFiles=new Map<string,{path:string;source:string}>();
   for(const [index,[path,source]] of Object.entries(input.files).entries()){
+    if(/(?:^|\/)(?:tests?|__tests__|specs?)(?:\/)|\.(?:test|spec)\.[cm]?[jt]sx?$/i.test(path))continue;
     if(!JS_TS_EXTENSION.test(path)){failedFiles.add(path);continue;}
     if(typeof source!=="string"||source.length>500_000){failedFiles.add(path);continue;}
     const ext=path.toLowerCase().split(".").pop()??"ts";

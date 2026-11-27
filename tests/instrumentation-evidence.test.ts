@@ -91,6 +91,17 @@ test("rejects a type-only namespace import",()=>{
  const r=scan('import type * as sdk from "@flagsmith/flagsmith"; sdk.default.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
 });
+test("test fixtures cannot create positive instrumentation evidence",()=>{
+ const r=scanInstrumentationEvidence({eventName:"CheckoutStarted",sourceSha:sha,files:{"tests/fake.test.ts":'window.flagsmith.trackEvent("CheckoutStarted");'}});
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);assert.equal(r.scannedFiles,0);
+});
+test("test fixtures cannot invalidate a genuine runtime instrumentation match",()=>{
+ const r=scanInstrumentationEvidence({eventName:"CheckoutStarted",sourceSha:sha,files:{
+  "src/checkout.ts":'window.flagsmith.trackEvent("CheckoutStarted");',
+  "tests/fake.test.ts":'window.flagsmith={trackEvent(){}};'
+ }});
+ assert.equal(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,true);
+});
 test("rejects replacement of window.flagsmith before a call",()=>{
  const r=scan('declare const fake:any; window.flagsmith=fake; window.flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
