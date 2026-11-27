@@ -255,8 +255,19 @@ export function scanInstrumentationEvidence(input:{
       const symbol=symbolOf(node);
       if(!symbol||seen.has(symbol))return false;
       seen.add(symbol);
-      return (symbol.declarations??[]).some(declaration=>
-        ts.isVariableDeclaration(declaration)&&!!declaration.initializer&&isGlobalObjectAlias(declaration.initializer,seen));
+      // Treat any binding assigned from a global object as tainted, including
+      // let aliases whose global assignment occurs after their declaration.
+      const declaredGlobal=(symbol.declarations??[]).some(declaration=>
+        ts.isVariableDeclaration(declaration)&&!!declaration.initializer&&isGlobalObjectAlias(declaration.initializer,new Set(seen)));
+      if(declaredGlobal)return true;
+      let assignedGlobal=false;
+      const inspectAssignments=(node:ts.Node):void=>{
+        if(ts.isBinaryExpression(node)&&ASSIGNMENT_OPERATORS.has(node.operatorToken.kind)&&
+          ts.isIdentifier(node.left)&&symbolOf(node.left)===symbol&&isGlobalObjectAlias(node.right,new Set(seen)))assignedGlobal=true;
+        ts.forEachChild(node,inspectAssignments);
+      };
+      inspectAssignments(sourceFile);
+      return assignedGlobal;
     };
     const reflectionApi=(node:ts.Expression,seen=new Set<ts.Symbol>()):"Object"|"Reflect"|undefined=>{
       node=unwrap(node);
