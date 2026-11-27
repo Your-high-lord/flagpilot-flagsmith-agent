@@ -219,10 +219,10 @@ test("controlled store demo sends the exact fixed synthetic conversion event onl
   assert.equal(await page.locator("#event-name").isEditable(),false);
   await page.locator("#environment-key").fill("public-development-sdk-key");
   await page.locator("#connect-form button[type=submit]").click();
-  await page.locator("#connection-badge").waitFor();
+  await page.getByText("ENROLLED",{exact:true}).waitFor();
   assert.equal(await page.locator("#connection-badge").innerText(),"ENROLLED");
   await page.locator("#conversion-button").click();
-  await page.getByText("Synthetic conversion 'demo_signup_completed' passed to Flagsmith").waitFor();
+  await page.getByText("One synthetic conversion attempt 'demo_signup_completed' was flushed").waitFor();
   const calls=await page.evaluate(()=>window.__flagpilotSdkCalls);
   assert.deepEqual(calls.find(call=>call[0]==="trackEvent"),["trackEvent","demo_signup_completed",{metadata:{source:"flagpilot_demo",synthetic:true}}]);
   assert.ok(calls.some(call=>call[0]==="flushEvents"));
@@ -230,6 +230,134 @@ test("controlled store demo sends the exact fixed synthetic conversion event onl
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
 
+test("controlled store demo permits only one conversion attempt per enrolled identity",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{window.__trackCount=0;window.__flushCount=0;window.flagsmith={async init(){},async identify(){},getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{id:596,name:"FlagPilot signup button test",inExperiment:true}};},trackEvent(){window.__trackCount++;},async flushEvents(){window.__flushCount++;}};});
+  await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  await page.goto(new URL("store.html",url).href);await page.locator("#environment-key").fill("public-development-sdk-key");await page.locator("#connect-form button[type=submit]").click();
+  await page.locator("#conversion-button").waitFor();await page.locator("#conversion-button").click();await page.locator("#conversion-button").evaluate(button=>button.dispatchEvent(new MouseEvent("click",{bubbles:true})));await page.waitForTimeout(30);
+  assert.equal(await page.evaluate(()=>window.__trackCount),1);assert.equal(await page.evaluate(()=>window.__flushCount),1);assert.equal(await page.locator("#conversion-button").isDisabled(),true);
+  await page.locator("#new-visitor").click();await page.waitForFunction(()=>document.querySelector("#conversion-button")&&!document.querySelector("#conversion-button").disabled);await page.locator("#conversion-button").click();await page.waitForTimeout(30);
+  assert.equal(await page.evaluate(()=>window.__trackCount),2,"a new synthetic identity gets one new attempt");
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+test("conversion reservation survives a page reload for the same persisted identity",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{
+   window.flagsmith={async init(){},async identify(){},getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{id:596,name:"FlagPilot signup button test",inExperiment:true}};},
+    trackEvent(){localStorage.setItem("__fp_reload_tracks",String(Number(localStorage.getItem("__fp_reload_tracks")||"0")+1));},
+    async flushEvents(){localStorage.setItem("__fp_reload_flushes",String(Number(localStorage.getItem("__fp_reload_flushes")||"0")+1));}};
+  });
+  await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  await page.goto(new URL("store.html",url).href);
+  const identityBefore=await page.evaluate(()=>localStorage.getItem("flagpilot-demo-identity-v1"));
+  assert.ok(identityBefore,"the first generated visitor identity must be persisted immediately");
+  await page.locator("#environment-key").fill("public-development-sdk-key");
+  await page.locator("#connect-form button[type=submit]").click();
+  await page.getByText("ENROLLED",{exact:true}).waitFor();
+  await page.locator("#conversion-button").click();
+  await page.getByText(/One synthetic conversion attempt/).waitFor();
+  assert.equal(await page.evaluate(()=>localStorage.getItem("__fp_reload_tracks")),"1");
+  await page.reload();
+  assert.equal(await page.evaluate(()=>localStorage.getItem("flagpilot-demo-identity-v1")),identityBefore,"reload must retain the same identity");
+  await page.locator("#connect-form button[type=submit]").click();
+  await page.getByText("ENROLLED",{exact:true}).waitFor();
+  assert.equal(await page.locator("#conversion-button").isDisabled(),true,"the existing reservation must disable conversion after reconnect");
+  await page.locator("#conversion-button").evaluate(button=>button.dispatchEvent(new MouseEvent("click",{bubbles:true})));
+  assert.equal(await page.evaluate(()=>localStorage.getItem("__fp_reload_tracks")),"1","a reload must not allow a second event for the same identity");
+  assert.equal(await page.evaluate(()=>localStorage.getItem("__fp_reload_flushes")),"1");
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+
+test("uncertain SDK flush remains reserved after reload and is not retried",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{
+   window.flagsmith={async init(){},async identify(){},getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{id:596,name:"FlagPilot signup button test",inExperiment:true}};},
+    trackEvent(){localStorage.setItem("__fp_uncertain_tracks",String(Number(localStorage.getItem("__fp_uncertain_tracks")||"0")+1));},
+    async flushEvents(){throw new Error("simulated network timeout after SDK queueing");}};
+  });
+  await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  await page.goto(new URL("store.html",url).href);
+  await page.locator("#environment-key").fill("public-development-sdk-key");
+  await page.locator("#connect-form button[type=submit]").click();
+  await page.getByText("ENROLLED",{exact:true}).waitFor();
+  await page.locator("#conversion-button").click();
+  await page.getByText(/Delivery uncertain · do not retry/).waitFor();
+  assert.equal(await page.evaluate(()=>localStorage.getItem("__fp_uncertain_tracks")),"1");
+  await page.reload();
+  await page.locator("#connect-form button[type=submit]").click();
+  await page.getByText("ENROLLED",{exact:true}).waitFor();
+  assert.equal(await page.locator("#conversion-button").isDisabled(),true,"uncertain flush must not clear the durable reservation");
+  await page.locator("#conversion-button").evaluate(button=>button.dispatchEvent(new MouseEvent("click",{bubbles:true})));
+  assert.equal(await page.evaluate(()=>localStorage.getItem("__fp_uncertain_tracks")),"1","uncertain delivery must not be retried for the same identity");
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+
+test("IndexedDB reservation prevents duplicate conversion attempts across two tabs and permits a new identity",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});const context=await browser.newContext();
+ const sdkCalls=[];
+ try{
+  await context.exposeBinding("__recordFlagpilotSdkCall",(_source,call)=>{sdkCalls.push(call);});
+  await context.addInitScript(()=>{
+   window.flagsmith={
+    async init(){},
+    async identify(identity){window.__flagpilotIdentity=identity;},
+    getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{id:596,name:"FlagPilot signup button test",inExperiment:true}};},
+    trackEvent(name){return window.__recordFlagpilotSdkCall({kind:"trackEvent",name,identity:window.__flagpilotIdentity});},
+    flushEvents(){return window.__recordFlagpilotSdkCall({kind:"flushEvents",identity:window.__flagpilotIdentity});}
+   };
+  });
+  await context.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  const first=await context.newPage(),second=await context.newPage();
+  await first.goto(new URL("store.html",url).href);
+  let identity=await first.evaluate(()=>localStorage.getItem("flagpilot-demo-identity-v1"));
+  assert.ok(identity,"the first visitor must be persisted on initial load");
+  await second.goto(new URL("store.html",url).href);
+  assert.equal(await second.evaluate(()=>localStorage.getItem("flagpilot-demo-identity-v1")),identity,"both tabs must share the same persisted identity");
+  for(const page of [first,second]){
+   await page.locator("#environment-key").fill("public-development-sdk-key");
+   await page.locator("#connect-form button[type=submit]").click();
+   await page.getByText("ENROLLED",{exact:true}).waitFor();
+  }
+  const waitForTerminal=page=>page.waitForFunction(()=>{
+   const value=document.querySelector("#result-event")?.textContent;
+   return value==="SDK flush completed"||value==="Already attempted for this identity"||
+     value==="Persistent safety reservation failed"||value==="Delivery uncertain · do not retry";
+  });
+  for(let round=0;round<5;round++){
+   if(round>0){
+    const previousIdentity=identity;
+    await first.locator("#new-visitor").click();
+    await first.waitForFunction(previous=>document.querySelector("#identity-value")?.textContent!==previous&&
+      document.querySelector("#connection-badge")?.textContent==="ENROLLED",previousIdentity);
+    identity=await first.evaluate(()=>localStorage.getItem("flagpilot-demo-identity-v1"));
+    await second.reload();
+    await second.locator("#connect-form button[type=submit]").click();
+    await second.getByText("ENROLLED",{exact:true}).waitFor();
+    assert.equal(await second.evaluate(()=>localStorage.getItem("flagpilot-demo-identity-v1")),identity);
+   }
+   const before=sdkCalls.length;
+   await Promise.all([first.locator("#conversion-button").click(),second.locator("#conversion-button").click()]);
+   await Promise.all([waitForTerminal(first),waitForTerminal(second)]);
+   const records=sdkCalls.slice(before);
+   const tracked=records.filter(call=>call.kind==="trackEvent");
+   const flushed=records.filter(call=>call.kind==="flushEvents");
+   assert.equal(tracked.length,1,`round ${round+1}: exactly one SDK conversion may be sent for the shared identity`);
+   assert.equal(flushed.length,1,`round ${round+1}: exactly one SDK flush must follow the conversion`);
+   assert.equal(tracked[0].name,"demo_signup_completed");
+   assert.equal(tracked[0].identity,identity);
+   assert.equal(flushed[0].identity,identity);
+  }
+  assert.equal(sdkCalls.filter(call=>call.kind==="trackEvent").length,5,"five new identities must result in five SDK conversion calls total");
+  assert.equal(new Set(sdkCalls.filter(call=>call.kind==="trackEvent").map(call=>call.identity)).size,5,"each SDK conversion must use a distinct identity");
+ }finally{await context.close();await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
 test("controlled store demo never sends a conversion for an identity outside the experiment",async()=>{
  const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
  try{
@@ -281,7 +409,7 @@ test("legacy saved event names cannot override the fixed demo metric or the even
   const savedConfig=await page.evaluate(()=>JSON.parse(localStorage.getItem("flagpilot-demo-config-v1")));
   assert.equal(savedConfig.eventName,"demo_signup_completed","connecting must overwrite the legacy event name with the fixed metric");
   await page.locator("#conversion-button").click();
-  await page.getByText("Synthetic conversion 'demo_signup_completed' passed to Flagsmith").waitFor();
+  await page.getByText("One synthetic conversion attempt 'demo_signup_completed' was flushed").waitFor();
   const tracked=await page.evaluate(()=>window.__flagpilotSdkCalls);
   assert.deepEqual(tracked,[["demo_signup_completed",{metadata:{source:"flagpilot_demo",synthetic:true}}]],"the exact event shown in the UI must be the event actually tracked");
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

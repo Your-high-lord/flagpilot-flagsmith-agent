@@ -119,7 +119,7 @@ The store demo validates that the client-side Environment Key contains only prin
 
 The store demo distinguishes an enabled feature with no experiment metadata from a known experiment whose current identity is not enrolled. In either case conversion tracking stays disabled until the SDK reports `experiment.inExperiment === true`. When experiment metadata is absent, the page asks the operator to verify that the experiment is running and linked to the selected Development environment before generating another visitor.
 
-The original visitor-facing SDK demo is preserved at `store.html`.
+The original visitor-facing SDK demo is preserved at `store.html`. Its sample-store metric contract is deliberately fixed to the exact case-sensitive event `demo_signup_completed`; it is not a configurable metric selector. The sample store is valid only when the provisioned experiment metric uses that exact event. Custom metrics for other applications must be implemented in those applications and independently verified by the source scanner. The sample store reserves one conversion attempt per synthetic identity in IndexedDB before calling the SDK. The reservation is shared across tabs and survives page reloads, including when a flush fails or delivery is uncertain. If the browser cannot persist the reservation, conversion tracking fails closed. Do not clear site data or retry an identity after an uncertain result; create a new synthetic visitor.
 
 ## Run the workflows
 
@@ -144,7 +144,7 @@ Open the deployed demo. Enter:
 - The **client-side Environment Key** from FlagPilot Development → SDK Settings (public key only).
 - The feature name from the provisioning report.
 - The control label from the proposal.
-- The exact metric event name from the provisioning report.
+- For this sample store only: the provisioning report's metric event must be exactly `demo_signup_completed` (case-sensitive). If the proposal uses any other event name, do not use the sample-store conversion button as evidence; instrument the actual target application with its own metric event and verify that source separately.
 
 Connect and confirm that Flagsmith returns the expected feature value for the selected Development environment. At this point the experiment is still a draft: do not expect enrolment or exposure metadata, do not generate more visitors to force enrolment, and do not click the conversion button. A draft cannot record experiment exposure or conversion events. No organisation Management API key belongs in the page.
 
@@ -186,4 +186,4 @@ FlagPilot uses Gemini for natural-language proposal generation, GitHub Actions f
 
 **Measurement window:** `timeframeDays` is a planning/reporting value only. Flagsmith does not receive an automatic end date from this workflow, and FlagPilot does not yet schedule a stop. An operator must monitor and complete/stop the experiment separately. The dashboard must not describe this as an automatically enforced duration.
 
-**Instrumentation scanner limits:** Source evidence is accepted only for executable, case-sensitive `trackEvent` calls on the official Flagsmith SDK or standard browser global. Only immutable `const` aliases are followed. Type-only imports, mutable aliases, detected direct/computed/reflective `trackEvent` mutations, and files with syntax or semantic diagnostics cannot establish positive evidence. This conservative static scan is not runtime proof; human event-delivery verification remains mandatory.
+**Instrumentation scanner limits:** Source evidence is accepted only for executable, case-sensitive `trackEvent` calls on the official Flagsmith SDK or standard browser global. Immutable SDK-client aliases are followed; browser-global aliases are traced for replacement and reflective mutation. Mutations are rejected only when the affected object resolves to the browser global or a verified SDK client, so unrelated `Object`/`Reflect` operations do not invalidate evidence. Type-only imports, mutable SDK-client aliases, detected direct/computed/reflective SDK mutations, and files with syntax or semantic diagnostics cannot establish positive evidence. This conservative static scan is not runtime proof; human event-delivery verification remains mandatory.
