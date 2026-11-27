@@ -268,7 +268,7 @@ test("legacy saved event names cannot override the fixed demo metric or the even
   assert.equal(await page.locator("#event-name").isEditable(),false);
   assert.equal(await page.locator("#feature-name").inputValue(),"fp_signup_button_label_8d4d6f","other saved settings should still restore");
   await page.locator("#connect-form button[type=submit]").click();
-  await page.locator("#connection-badge").waitFor();
+  await page.getByText("ENROLLED",{exact:true}).waitFor();
   assert.equal(await page.locator("#connection-badge").innerText(),"ENROLLED");
   await page.locator("#conversion-button").click();
   await page.getByText("Synthetic conversion 'demo_signup_completed' passed to Flagsmith").waitFor();
