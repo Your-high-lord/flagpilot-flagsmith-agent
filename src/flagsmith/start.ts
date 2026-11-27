@@ -3,6 +3,8 @@ import {FlagsmithApi,isRecord} from "./api.js";
 export interface StartExperimentOptions {
   /** Allowed pre-start states for this specific caller. */
   allowedStatuses?:readonly string[];
+  /** Validate the same fresh experiment read immediately before the write. */
+  validateBeforeStart?:(experiment:Record<string,unknown>)=>Promise<void>|void;
 }
 
 export async function startExperiment(
@@ -20,6 +22,7 @@ export async function startExperiment(
   if(!allowed.includes(previous)) {
     throw new Error(`Experiment is in '${previous}' state. Allowed pre-start states: ${allowed.join(", ")}. Refusing to start.`);
   }
+  await options.validateBeforeStart?.(before);
   await api.startExperiment(id);
   const after=await api.getExperiment(id);
   if(!isRecord(after))throw new Error("Start request accepted but status could not be verified.");
