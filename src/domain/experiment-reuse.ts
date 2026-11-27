@@ -12,12 +12,14 @@ export function verifyExistingExperimentConfiguration(input:{
  featureId:number;
  treatmentOptionId:number;
  metricId:number;
+ allowedStatuses?:string[];
 }):void{
  const {experiment:e,proposal:p,featureId,treatmentOptionId,metricId}=input;
  if(e.name!==p.experimentName)throw new Error("Existing experiment name differs from the approved proposal.");
  if(e.hypothesis!==p.hypothesis)throw new Error("Existing experiment hypothesis differs from the approved proposal.");
  const status=String(e.status??"").toLowerCase();
- if(status!=="created")throw new Error("Existing experiment is not an untouched draft (created); refusing reuse.");
+ const allowed=input.allowedStatuses??["created"];
+ if(!allowed.includes(status))throw new Error("Existing experiment status is not allowed for this operation; refusing unsafe reuse.");
  const feature=requiredRecord(e.feature,"nested feature");
  if(Number(feature.id)!==featureId)throw new Error("Existing experiment references a different feature.");
  if(feature.type!=="MULTIVARIATE"||feature.initial_value!=="control")throw new Error("Existing experiment feature type or control default does not match the approved configuration.");

@@ -33,9 +33,13 @@ FlagPilot turns a natural-language experiment request into a validated proposal,
 Create a **public** repository named `flagpilot-flagsmith-agent`. The competition repository and source code must start after the official kickoff. 
 ### 2. Create protected environments and add the management secret
 
-In **Settings → Environments**, create `flagsmith-create` and `flagsmith-start`. Add your GitHub account as a required reviewer for both, restrict deployments to `main`, and disable **Prevent self-review** so a solo participant can approve their own deployment.
+In **Settings → Environments**, create `flagsmith-create` and `flagsmith-start`. Add an authorized required reviewer for both and restrict deployments to `main`. For a solo owner who must approve their own deployments, disable **Prevent self-review** as an explicit solo-operator exception; when an independent reviewer is available, enable it and have that person approve.
 
 In the `flagsmith-create` environment, add the secret `FLAGSMITH_API_KEY`. Add the same secret to `flagsmith-start`. Do not store this privileged key as an unrestricted repository secret.
+
+### 2a. Protect the `main` branch
+
+In **Settings → Branches → Add branch protection rule** (or create an equivalent repository ruleset), target `main` and require pull requests before merging. Require the repository's **CI** check to pass before merging, and disallow force pushes and branch deletion. Re-check the rule after saving: the branch must show as protected. This repository-level rule is separate from the workflow's `refs/heads/main` guard and the two Environment approvals.
 
 In **Settings → Secrets and variables → Actions → New repository secret**, add only:
 
@@ -107,9 +111,9 @@ CI checks dashboard JavaScript syntax, runs a Playwright Chromium smoke test aga
 
 ## FlagPilot operator console
 
-The GitHub Pages site is the FlagPilot operator console. It provides the natural-language request form, proposal/resource summary, workflow timeline, evidence links and navigation to the Flagsmith SDK demo. To submit a new request from the page, connect a fine-grained GitHub personal access token restricted to this repository with **Actions: read and write** permission. The token is kept in the browser tab's session storage and is sent only to `api.github.com`; it is never sent to FlagPilot or Flagsmith servers. The Flagsmith organisation Management API key remains a protected GitHub Environment secret.
+The GitHub Pages site is the FlagPilot operator console. It provides the natural-language request form, proposal/resource summary, workflow timeline, evidence links and navigation to the Flagsmith SDK demo. Resource cards from provisioning run #2 are explicitly historical snapshots, not live Flagsmith queries. Integration badges describe configured workflows and do not claim current service health. Current GitHub workflow activity is refreshed from the Actions API. To submit a new request from the page, connect a fine-grained GitHub personal access token restricted to this repository with **Actions: read and write** permission. The token is kept in the browser tab's session storage and is sent only to `api.github.com`; it is never sent to FlagPilot or Flagsmith servers. The Flagsmith organisation Management API key remains a protected GitHub Environment secret.
 
-GitHub Environment approvals still happen on GitHub's protected deployment review screen. The dashboard links to those workflows; it does not bypass or simulate approval. Live workflow status is read from the GitHub Actions API. The current experiment/resource summary is a verified snapshot and is not presented as a live Flagsmith API query.
+GitHub Environment approvals still happen on GitHub's protected deployment review screen. The dashboard links to those workflows; it does not bypass or simulate approval. Before enabling real provisioning or start operations, configure both repository Environments (`flagsmith-create` and `flagsmith-start`) with a required human reviewer and restrict deployment branches to `main` only. **Solo-owner setup:** if you are the only authorized reviewer and must approve your own deployments, disable **Prevent self-review** for these two environments; this is an explicit solo-operator exception, not an independent approval. **Independent-reviewer setup:** when another authorized person can approve deployments, enable **Prevent self-review** and have that person approve. Keep `FLAGSMITH_API_KEY` only as an environment secret in each protected environment. The workflow itself also rejects start dispatches from non-main refs. These repository settings must be verified in GitHub Settings; CI cannot prove they are active. Environment reviewer and branch policies are repository settings, not workflow YAML; verify them in **Settings → Environments** because CI cannot prove those repository-level protections. Live workflow status is read from the GitHub Actions API. The current experiment/resource summary is a verified snapshot and is not presented as a live Flagsmith API query.
 
 The original visitor-facing SDK demo is preserved at `store.html`.
 
@@ -140,9 +144,9 @@ Open the deployed demo. Enter:
 
 Connect, confirm that Flagsmith returns a variation and confirms experiment enrolment, generate another demo visitor and confirm identity stability, then click the demo conversion button. The page uses `getExperimentFlag`, `trackEvent` and `flushEvents`. No organisation Management API key belongs in the page.
 
-### D. Start the experiment (second approval)
+### D. Start the experiment (separate protected approval)
 
-Only after the demo and events have been smoke-tested, run **Actions → FlagPilot · Start experiment (second approval)**. Enter the numeric experiment ID and set `demo_verified` to `true`. Review and approve the protected `flagsmith-start` job. The workflow starts the experiment and checks that the returned status is `running`.
+Only after the demo and events have been smoke-tested, use the dashboard start form or run **Actions → FlagPilot · Start verified experiment**. Supply both the successful provisioning workflow run ID and the experiment ID recorded in that run's artifact; set `demo_verified` to `true`. The workflow accepts only successful manual runs of the approved FlagPilot provisioning workflows on `main`, downloads the exact run's provisioning artifact, and checks that its experiment ID, feature, treatment, metric, project and environment match. Only then does it pause at the protected `flagsmith-start` environment. After that human approval, the start job downloads the verified artifact again, reads the live experiment and project-level feature, and fetches the live metric by the artifact's metric ID as the final configuration read before the start write. It verifies metric ID, exact name, exact case-sensitive `definition.event`, `occurrence` aggregation and `up` direction, alongside the complete draft experiment, feature and treatment configuration. Any drift stops the workflow before the start request; the resulting running status is then read back and verified. An arbitrary experiment ID, an old artifact without target metadata, a different environment, a changed configuration or a non-draft experiment is rejected.
 
 ## Testing
 

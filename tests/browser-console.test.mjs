@@ -30,7 +30,8 @@ test("dashboard loads, renders report, and parses workflow run ID without browse
   await page.goto(url);await page.getByText("Example checkout change").waitFor();
   assert.equal(await page.locator("#review-run-id").inputValue(),"12345");
   assert.equal(await page.locator("#report-verdict").innerText(),"ready for experiment");
-  assert.equal(await page.locator("#delivery-verified").count(),1);
+  assert.equal(await page.locator("#promotion-confirm").count(),1);
+  assert.equal(await page.locator("#delivery-verified").count(),0);
   await page.locator("#pr-url").fill("https://github.com/example/app/pull/12");
   await page.locator("#pr-form button").click();
   await page.getByText("Connect GitHub first. The PR review request has not been sent.").waitFor();
@@ -51,7 +52,7 @@ test("dashboard submits a fully eligible authenticated promotion with explicit c
   await page.getByRole("button",{name:"Connect GitHub"}).click();
   await page.locator("#token").fill("github_pat_test_only");
   await page.locator("#save-token").click();
-  await page.locator("#delivery-verified").check();await page.locator("#promote-confirm").check();
+  await page.locator("#promotion-confirm").check();
   await page.locator("#promote-form button").click();
   await page.getByText(/Request submitted/).waitFor();
   assert.equal(dispatchBody?.inputs?.review_run_id,"12345");
@@ -72,7 +73,7 @@ test("dashboard blocks promotion when deterministic source evidence is missing",
    await route.fulfill({status:204,body:""});
   });
   await page.goto(url);await page.getByText("Example checkout change").waitFor();
-  await page.locator("#delivery-verified").check();await page.locator("#promote-confirm").check();
+  await page.locator("#promotion-confirm").check();
   await page.locator("#promote-form button").click();
   await page.getByText(/Not eligible:/).waitFor();
   assert.equal(dispatchCount,0);
@@ -102,10 +103,35 @@ test("dashboard blocks missing metric, incomplete AI evidence, and inapplicable 
   for(const mutate of cases){
    mutate();await page.goto(url);
    await page.getByText("Example checkout change").waitFor();
-   await page.locator("#delivery-verified").check();await page.locator("#promote-confirm").check();
+   await page.locator("#promotion-confirm").check();
    await page.locator("#promote-form button").click();
    await page.getByText(/Not eligible:/).waitFor();
   }
   assert.equal(dispatchCount,0);
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+
+test("start request uses explicit provisioning run and experiment IDs instead of a hardcoded ID",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();let dispatchBody=null;
+  await page.addInitScript(()=>sessionStorage.setItem("flagpilot-gh-token","fake-token"));
+  await page.route("https://api.github.com/**",async route=>{
+   const request=route.request(),path=new URL(request.url()).pathname;
+   if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent"){await route.fulfill({status:200,contentType:"application/json",body:"{}"});return;}
+   if(path.endsWith("/actions/workflows/start-experiment.yml/dispatches")&&request.method()==="POST"){dispatchBody=request.postDataJSON();await route.fulfill({status:204,body:""});return;}
+   if(path.endsWith("/actions/runs")){await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({workflow_runs:[]})});return;}
+   await route.fulfill({status:404,body:"not found"});
+  });
+  await page.goto(url);
+  await page.locator("#provision-run-id").fill("45912345678");
+  await page.locator("#start-experiment-id").fill("98765");
+  await page.locator("#demo-verified").check();
+  await page.locator("#start-form button").click();
+  await page.locator("#start-notice").getByText(/Start request submitted/).waitFor();
+  assert.match(await page.locator("#start-notice").textContent(),/45912345678.*98765/);
+  assert.equal(dispatchBody?.inputs?.provision_run_id,"45912345678");
+  assert.equal(dispatchBody?.inputs?.experiment_id,"98765");
+  assert.equal(dispatchBody?.inputs?.demo_verified,"true");
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });

@@ -18,7 +18,8 @@
     "setup:environment": "npm run build && node dist/src/commands/setup-environment.js",
     "prepare:pr-proposal": "npm run build && node dist/src/commands/prepare-pr-proposal.js",
     "test:browser": "node --test tests/browser-console.test.mjs",
-    "verify:pr-source": "npm run build && node dist/src/commands/verify-pr-source.js"
+    "verify:pr-source": "npm run build && node dist/src/commands/verify-pr-source.js",
+    "verify:start-target": "npm run build && node dist/src/commands/verify-start-target.js"
   },
   "devDependencies": {
     "@types/node": "22.19.1",
