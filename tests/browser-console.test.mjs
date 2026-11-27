@@ -285,7 +285,7 @@ test("rejects hidden Unicode in the Environment Key before calling the Flagsmith
   await page.addInitScript(()=>{window.__initCalls=0;window.flagsmith={async init(){window.__initCalls++;},async identify(){},getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{inExperiment:true}};}};});
   await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
   await page.goto(new URL("store.html",url).href);
-  await page.locator("#environment-key").fill("public-sdk-key-\\u200B-hidden");
+  await page.locator("#environment-key").fill("public-sdk-key-"+String.fromCharCode(0x200B)+"-hidden");
   await page.locator("#connect-form button[type=submit]").click();
   await page.getByText(/Environment Key contains whitespace, hidden characters or non-ASCII text/).waitFor();
   assert.equal(await page.evaluate(()=>window.__initCalls),0,"invalid key must be rejected before an HTTP header is set");
