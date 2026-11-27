@@ -283,7 +283,7 @@ export function scanInstrumentationEvidence(input:{
       }
       return undefined;
     };
-    const sdkOfClient=(node:ts.Expression,seen=new Set<ts.Symbol>()):InstrumentationSourceMatch["sdk"]|undefined=>{
+    const sdkOfClient=(node:ts.Expression,seen=new Set<ts.Symbol>(),allowMutableAlias=false):InstrumentationSourceMatch["sdk"]|undefined=>{
       node=unwrap(node);
       if(ts.isPropertyAccessExpression(node)){
         if(node.name.text==="default"&&isNamespace(node.expression))return SDK_PACKAGE;
@@ -299,17 +299,19 @@ export function scanInstrumentationEvidence(input:{
       for(const declaration of symbol.declarations??[]){
         if(!ts.isVariableDeclaration(declaration)||!declaration.initializer)continue;
         const declarationList=declaration.parent;
-        // Only immutable const aliases are followed; let/var aliases fail closed.
-        if(!ts.isVariableDeclarationList(declarationList)||(declarationList.flags&ts.NodeFlags.Const)===0)continue;
+        // Positive evidence follows only immutable const aliases. Mutation analysis
+        // also follows let/var aliases because they can still mutate the same SDK object.
+        if(!ts.isVariableDeclarationList(declarationList))continue;
+        if(!allowMutableAlias&&(declarationList.flags&ts.NodeFlags.Const)===0)continue;
         const initializer=unwrap(declaration.initializer);
         if(ts.isCallExpression(initializer)&&isFactoryCall(initializer.expression))return SDK_PACKAGE;
-        const resolved=sdkOfClient(initializer,seen);
+        const resolved=sdkOfClient(initializer,seen,allowMutableAlias);
         if(resolved)return resolved;
       }
       return undefined;
     };
 
-    if(hasTrackEventMutation(sourceFile,node=>!!sdkOfClient(node),reflectionApi))sdkMethodMutated=true;
+    if(hasTrackEventMutation(sourceFile,node=>!!sdkOfClient(node,new Set<ts.Symbol>(),true),reflectionApi))sdkMethodMutated=true;
     if(hasGlobalSdkReplacement(sourceFile,isGlobalObjectAlias,reflectionApi))globalSdkReplaced=true;
 
     const visit=(node:ts.Node):void=>{
