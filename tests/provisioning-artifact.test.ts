@@ -57,6 +57,6 @@ test("rejects a started or stopped experiment in a provisioning artifact",()=>{
  assert.throws(()=>validateProvisioningArtifact(value,expected),/newly provisioned draft/);
 });
 test("rejects incomplete artifacts without target metadata",()=>{
- const value=artifact();delete value.target;
+ const value=artifact() as Record<string,unknown>;delete value.target;
  assert.throws(()=>validateProvisioningArtifact(value,expected),/complete FlagPilot provisioning artifact/);
 });
