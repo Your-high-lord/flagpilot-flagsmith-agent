@@ -91,6 +91,18 @@ test("rejects a type-only namespace import",()=>{
  const r=scan('import type * as sdk from "@flagsmith/flagsmith"; sdk.default.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
 });
+test("rejects replacement of window.flagsmith before a call",()=>{
+ const r=scan('declare const fake:any; window.flagsmith=fake; window.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects replacement of globalThis.flagsmith before a call",()=>{
+ const r=scan('declare const fake:any; globalThis.flagsmith=fake; globalThis.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects reflective replacement of window.flagsmith",()=>{
+ const r=scan('declare const fake:any; Reflect.set(window,"flagsmith",fake); window.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
 test("rejects direct replacement of the SDK trackEvent method",()=>{
  const r=scan('import flagsmith from "@flagsmith/flagsmith"; declare const otherService:any; flagsmith.trackEvent=otherService.trackEvent; flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);

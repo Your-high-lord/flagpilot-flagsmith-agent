@@ -230,6 +230,19 @@ test("controlled store demo sends the exact fixed synthetic conversion event onl
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
 
+test("controlled store demo permits only one conversion attempt per enrolled identity",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{window.__trackCount=0;window.__flushCount=0;window.flagsmith={async init(){},async identify(){},getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{id:596,name:"FlagPilot signup button test",inExperiment:true}};},trackEvent(){window.__trackCount++;},async flushEvents(){window.__flushCount++;}};});
+  await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  await page.goto(new URL("store.html",url).href);await page.locator("#environment-key").fill("public-development-sdk-key");await page.locator("#connect-form button[type=submit]").click();
+  await page.locator("#conversion-button").waitFor();await page.locator("#conversion-button").click();await page.locator("#conversion-button").click();await page.waitForTimeout(30);
+  assert.equal(await page.evaluate(()=>window.__trackCount),1);assert.equal(await page.evaluate(()=>window.__flushCount),1);assert.equal(await page.locator("#conversion-button").isDisabled(),true);
+  await page.locator("#new-visitor").click();await page.locator("#conversion-button").waitFor();await page.locator("#conversion-button").click();await page.waitForTimeout(30);
+  assert.equal(await page.evaluate(()=>window.__trackCount),2,"a new synthetic identity gets one new attempt");
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
 test("controlled store demo never sends a conversion for an identity outside the experiment",async()=>{
  const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
  try{

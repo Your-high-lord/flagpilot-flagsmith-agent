@@ -48,6 +48,28 @@ function propertyName(node:ts.Expression):string|undefined{
     (ts.isStringLiteral(node.argumentExpression)||ts.isNoSubstitutionTemplateLiteral(node.argumentExpression)))return node.argumentExpression.text;
   return undefined;
 }
+function hasGlobalSdkReplacement(sourceFile:ts.SourceFile):boolean{
+ let replaced=false;
+ const globalReceiver=(node:ts.Expression)=>{node=unwrap(node);return ts.isIdentifier(node)&&["window","globalThis","self"].includes(node.text);};
+ const visit=(node:ts.Node):void=>{
+  if(ts.isBinaryExpression(node)&&ASSIGNMENT_OPERATORS.has(node.operatorToken.kind)&&
+   (ts.isPropertyAccessExpression(node.left)||ts.isElementAccessExpression(node.left))&&propertyName(node.left)==="flagsmith"&&globalReceiver(node.left.expression))replaced=true;
+  if(ts.isDeleteExpression(node)&&(ts.isPropertyAccessExpression(node.expression)||ts.isElementAccessExpression(node.expression))&&propertyName(node.expression)==="flagsmith"&&globalReceiver(node.expression.expression))replaced=true;
+  if(ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)){
+   const receiver=unwrap(node.expression.expression),method=node.expression.name.text,args=node.arguments;
+   if(ts.isIdentifier(receiver)&&["Object","Reflect"].includes(receiver.text)&&["defineProperty","defineProperties","assign","setPrototypeOf","set","deleteProperty"].includes(method))replaced=true;
+   else if(globalReceiver(receiver)){
+    const key=args[1],keyMatch=!!key&&(ts.isStringLiteral(key)||ts.isNoSubstitutionTemplateLiteral(key))&&key.text==="flagsmith";
+    const objectHasKey=(arg:ts.Expression|undefined)=>{if(!arg)return false;const x=unwrap(arg);return ts.isObjectLiteralExpression(x)&&x.properties.some(p=>(ts.isPropertyAssignment(p)||ts.isMethodDeclaration(p)||ts.isGetAccessorDeclaration(p)||ts.isSetAccessorDeclaration(p))&&(ts.isIdentifier(p.name)||ts.isStringLiteral(p.name))&&p.name.text==="flagsmith");};
+    if(["defineProperty","set","deleteProperty"].includes(method)&&keyMatch)replaced=true;
+    if(method==="defineProperties"&&objectHasKey(key))replaced=true;
+    if(method==="assign"&&args.slice(1).some(objectHasKey))replaced=true;
+   }
+  }
+  ts.forEachChild(node,visit);
+ };
+ visit(sourceFile);return replaced;
+}
 function hasTrackEventMutation(sourceFile:ts.SourceFile):boolean{
   let mutated=false;
   const visit=(node:ts.Node):void=>{
@@ -139,7 +161,7 @@ export function scanInstrumentationEvidence(input:{
   const program=ts.createProgram([...virtualFiles.keys(),shimPath],options,host);
   const checker=program.getTypeChecker();
   let eventLiteralFound=false;
-  let sdkMethodMutated=false;
+  let sdkMethodMutated=false,globalSdkReplaced=false;
   const matches:InstrumentationSourceMatch[]=[];
 
   for(const [virtualName,entry] of virtualFiles){
@@ -151,6 +173,7 @@ export function scanInstrumentationEvidence(input:{
     const runtimeImportErrors=semantic.filter(diagnostic=>[1361,1362,1363,1364,1365,2588,2632,2693].includes(diagnostic.code));
     if(syntactic.length>0||runtimeImportErrors.length>0){failedFiles.add(entry.path);continue;}
     if(hasTrackEventMutation(sourceFile))sdkMethodMutated=true;
+    if(hasGlobalSdkReplacement(sourceFile))globalSdkReplaced=true;
 
     const defaultImports=new Set<ts.Symbol>();
     const factoryImports=new Set<ts.Symbol>();
@@ -245,14 +268,14 @@ export function scanInstrumentationEvidence(input:{
 
   // Conservatively invalidate all positive evidence if any inspected file mutates
   // a trackEvent property; this also protects against cross-file import aliases.
-  if(sdkMethodMutated)matches.length=0;
+  if(sdkMethodMutated||globalSdkReplaced)matches.length=0;
   const failed=[...failedFiles].sort();
   const complete=failed.length===0&&virtualFiles.size>0;
   const status:InstrumentationSourceEvidence["status"]=!complete?"incomplete":matches.length?"flagsmith_sdk_call_found":eventLiteralFound?"event_literal_only":"not_found";
   const note=status==="flagsmith_sdk_call_found"
     ?"The exact case-sensitive event literal is passed to trackEvent on an SDK client imported from @flagsmith/flagsmith, created by its documented factory, or obtained from the standard browser global. Only immutable const aliases are followed and detected trackEvent mutation is rejected. This is source-code evidence only; it does not prove delivery to Flagsmith or warehouse ingestion."
-    :sdkMethodMutated
-      ?"A trackEvent method mutation or replacement was detected in the inspected source set. No Flagsmith instrumentation call is considered verified."
+    :(sdkMethodMutated||globalSdkReplaced)
+      ?(globalSdkReplaced?"A global Flagsmith SDK object replacement or reflective mutation was detected in the inspected source set. No Flagsmith instrumentation call is considered verified.":"A trackEvent method mutation or replacement was detected in the inspected source set. No Flagsmith instrumentation call is considered verified.")
       :status==="event_literal_only"
         ?"The exact event-name literal exists in parsed source, but no supported Flagsmith SDK trackEvent call was found."
         :status==="not_found"
