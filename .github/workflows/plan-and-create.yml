@@ -14,6 +14,9 @@ concurrency:
 jobs:
   plan:
     name: AI plan (no Flagsmith writes)
+    if: ${{ github.ref == 'refs/heads/main' }}
+    environment:
+      name: github-pages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -38,6 +41,7 @@ jobs:
   create:
     name: Create feature, metric and draft experiment
     needs: [plan]
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     environment:
       name: flagsmith-create

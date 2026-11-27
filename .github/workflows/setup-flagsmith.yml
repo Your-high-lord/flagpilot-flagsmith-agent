@@ -25,6 +25,7 @@ concurrency:
 jobs:
   setup:
     name: Create or reuse dedicated environment
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     environment:
       name: flagsmith-create
