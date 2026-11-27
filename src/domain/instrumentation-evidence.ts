@@ -70,10 +70,11 @@ function objectMayContainProperty(node:ts.Expression|undefined,key:string):boole
   }
   return false;
 }
+type ReflectionMutationMethod={api:"Object"|"Reflect";method:string};
 function hasGlobalSdkReplacement(
   sourceFile:ts.SourceFile,
   isGlobalObject:(node:ts.Expression)=>boolean,
-  reflectionApi:(node:ts.Expression)=>"Object"|"Reflect"|undefined
+  reflectionMethod:(node:ts.Expression)=>ReflectionMutationMethod|undefined
 ):boolean{
   let replaced=false;
   const visit=(node:ts.Node):void=>{
@@ -83,11 +84,12 @@ function hasGlobalSdkReplacement(
     if(ts.isDeleteExpression(node)&&
       (ts.isPropertyAccessExpression(node.expression)||ts.isElementAccessExpression(node.expression))&&
       propertyName(node.expression)==="flagsmith"&&isGlobalObject(node.expression.expression))replaced=true;
-    if(ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)){
-      const api=reflectionApi(node.expression.expression),method=node.expression.name.text,args=node.arguments,target=args[0];
-      if(api&&target&&isGlobalObject(target)){
+    if(ts.isCallExpression(node)){
+      const resolved=reflectionMethod(node.expression),args=node.arguments,target=args[0];
+      if(resolved&&target&&isGlobalObject(target)){
+        const {api,method}=resolved;
         if(method==="setPrototypeOf")replaced=true;
-        else if(method==="assign"&&args.slice(1).some(source=>objectMayContainProperty(source,"flagsmith")))replaced=true;
+        else if(api==="Object"&&method==="assign"&&args.slice(1).some(source=>objectMayContainProperty(source,"flagsmith")))replaced=true;
         else if((method==="defineProperty"||method==="set"||method==="deleteProperty")&&propertyMayBe(args[1],"flagsmith"))replaced=true;
         else if(method==="defineProperties"&&objectMayContainProperty(args[1],"flagsmith"))replaced=true;
       }
@@ -100,7 +102,7 @@ function hasGlobalSdkReplacement(
 function hasTrackEventMutation(
   sourceFile:ts.SourceFile,
   isSdkClient:(node:ts.Expression)=>boolean,
-  reflectionApi:(node:ts.Expression)=>"Object"|"Reflect"|undefined
+  reflectionMethod:(node:ts.Expression)=>ReflectionMutationMethod|undefined
 ):boolean{
   let mutated=false;
   const visit=(node:ts.Node):void=>{
@@ -110,11 +112,12 @@ function hasTrackEventMutation(
     if(ts.isDeleteExpression(node)&&
       (ts.isPropertyAccessExpression(node.expression)||ts.isElementAccessExpression(node.expression))&&
       propertyName(node.expression)==="trackEvent"&&isSdkClient(node.expression.expression))mutated=true;
-    if(ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)){
-      const api=reflectionApi(node.expression.expression),method=node.expression.name.text,args=node.arguments,target=args[0];
-      if(api&&target&&isSdkClient(target)){
+    if(ts.isCallExpression(node)){
+      const resolved=reflectionMethod(node.expression),args=node.arguments,target=args[0];
+      if(resolved&&target&&isSdkClient(target)){
+        const {api,method}=resolved;
         if(method==="setPrototypeOf")mutated=true;
-        else if(method==="assign"&&args.slice(1).some(source=>objectMayContainProperty(source,"trackEvent")))mutated=true;
+        else if(api==="Object"&&method==="assign"&&args.slice(1).some(source=>objectMayContainProperty(source,"trackEvent")))mutated=true;
         else if((method==="defineProperty"||method==="set"||method==="deleteProperty")&&propertyMayBe(args[1],"trackEvent"))mutated=true;
         else if(method==="defineProperties"&&objectMayContainProperty(args[1],"trackEvent"))mutated=true;
       }
@@ -307,6 +310,54 @@ export function scanInstrumentationEvidence(input:{
       inspectAssignments(sourceFile);
       return assignedApi;
     };
+    const reflectionMethod=(node:ts.Expression,seen=new Set<ts.Symbol>()):ReflectionMutationMethod|undefined=>{
+      node=unwrap(node);
+      const allowed=(api:"Object"|"Reflect",method:string):boolean=>api==="Object"
+        ?["assign","defineProperty","defineProperties","setPrototypeOf"].includes(method)
+        :["set","defineProperty","deleteProperty","setPrototypeOf"].includes(method);
+      if(ts.isPropertyAccessExpression(node)||ts.isElementAccessExpression(node)){
+        const api=reflectionApi(node.expression),method=propertyName(node);
+        if(api&&method&&allowed(api,method))return{api,method};
+      }
+      if(!ts.isIdentifier(node))return undefined;
+      const symbol=symbolOf(node);
+      if(!symbol||seen.has(symbol))return undefined;
+      seen.add(symbol);
+      for(const declaration of symbol.declarations??[]){
+        if(!ts.isVariableDeclaration(declaration))continue;
+        if(declaration.initializer){
+          const direct=reflectionMethod(declaration.initializer,new Set(seen));
+          if(direct)return direct;
+          if(ts.isObjectBindingPattern(declaration.name)){
+            const api=reflectionApi(declaration.initializer);
+            if(api){
+              for(const element of declaration.name.elements){
+                if(!ts.isIdentifier(element.name)||symbolOf(element.name)!==symbol)continue;
+                const property=element.propertyName;
+                const method=property
+                  ?ts.isIdentifier(property)||ts.isStringLiteral(property)||ts.isNumericLiteral(property)?property.text:
+                    ts.isComputedPropertyName(property)&&
+                      (ts.isStringLiteral(property.expression)||ts.isNoSubstitutionTemplateLiteral(property.expression))
+                        ?property.expression.text:undefined
+                  :element.name.text;
+                if(method&&allowed(api,method))return{api,method};
+              }
+            }
+          }
+        }
+      }
+      let assigned:ReflectionMutationMethod|undefined;
+      const inspectAssignments=(current:ts.Node):void=>{
+        if(ts.isBinaryExpression(current)&&ASSIGNMENT_OPERATORS.has(current.operatorToken.kind)&&
+          ts.isIdentifier(current.left)&&symbolOf(current.left)===symbol){
+          const resolved=reflectionMethod(current.right,new Set(seen));
+          if(resolved)assigned=resolved;
+        }
+        ts.forEachChild(current,inspectAssignments);
+      };
+      inspectAssignments(sourceFile);
+      return assigned;
+    };
     const sdkOfClient=(node:ts.Expression,seen=new Set<ts.Symbol>(),allowMutableAlias=false):InstrumentationSourceMatch["sdk"]|undefined=>{
       node=unwrap(node);
       if(ts.isPropertyAccessExpression(node)){
@@ -335,8 +386,8 @@ export function scanInstrumentationEvidence(input:{
       return undefined;
     };
 
-    if(hasTrackEventMutation(sourceFile,node=>!!sdkOfClient(node,new Set<ts.Symbol>(),true),reflectionApi))sdkMethodMutated=true;
-    if(hasGlobalSdkReplacement(sourceFile,isGlobalObjectAlias,reflectionApi))globalSdkReplaced=true;
+    if(hasTrackEventMutation(sourceFile,node=>!!sdkOfClient(node,new Set<ts.Symbol>(),true),reflectionMethod))sdkMethodMutated=true;
+    if(hasGlobalSdkReplacement(sourceFile,isGlobalObjectAlias,reflectionMethod))globalSdkReplaced=true;
 
     const visit=(node:ts.Node):void=>{
       if((ts.isStringLiteral(node)||ts.isNoSubstitutionTemplateLiteral(node))&&node.text===eventName)eventLiteralFound=true;
