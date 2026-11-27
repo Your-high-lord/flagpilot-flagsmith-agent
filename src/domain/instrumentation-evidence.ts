@@ -251,7 +251,14 @@ export function scanInstrumentationEvidence(input:{
       if(ts.isPropertyAccessExpression(node)&&node.name.text==="window"&&ts.isIdentifier(node.expression)&&
         node.expression.text==="globalThis"&&isStandardGlobal(node.expression))return true;
       if(!ts.isIdentifier(node))return false;
-      if(["window","globalThis","self"].includes(node.text)&&isStandardGlobal(node))return true;
+      if(["window","globalThis","self"].includes(node.text)){
+        const symbol=symbolOf(node);
+        // Some TypeScript lib versions do not expose globalThis through the
+        // same declaration path as window. Accept the intrinsic global when
+        // it is not locally shadowed; local bindings still fail closed.
+        if(isStandardGlobal(node)||(node.text==="globalThis"&&
+          (!symbol||(symbol.declarations??[]).every(declaration=>declaration.getSourceFile().isDeclarationFile))))return true;
+      }
       const symbol=symbolOf(node);
       if(!symbol||seen.has(symbol))return false;
       seen.add(symbol);
