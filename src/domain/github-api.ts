@@ -62,7 +62,7 @@ export function createGitHubApiClient(
             "X-GitHub-Api-Version":"2022-11-28",
             ...(options.headers??{})
           },
-          body:options.body,
+          ...(options.body!==undefined?{body:options.body}:{}),
           signal:AbortSignal.timeout(20_000),
           redirect:"error"
         });
@@ -104,10 +104,10 @@ export function createGitHubApiClient(
 }
 
 export function selectGitHubApiToken(input:{
-  workflowRepository?:string;
+  workflowRepository?:string|undefined;
   targetRepository:string;
-  workflowToken?:string;
-  publicToken?:string;
+  workflowToken?:string|undefined;
+  publicToken?:string|undefined;
 }):string|undefined{
   const workflowRepository=input.workflowRepository?.trim().toLowerCase();
   const targetRepository=input.targetRepository.trim().toLowerCase();
