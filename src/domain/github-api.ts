@@ -102,6 +102,24 @@ export function createGitHubApiClient(
     throw new Error("GitHub API request ended unexpectedly.");
   };
 }
+
+export function selectGitHubApiToken(input:{
+  workflowRepository?:string;
+  targetRepository:string;
+  workflowToken?:string;
+  publicToken?:string;
+}):string|undefined{
+  const workflowRepository=input.workflowRepository?.trim().toLowerCase();
+  const targetRepository=input.targetRepository.trim().toLowerCase();
+  if(workflowRepository&&workflowRepository===targetRepository){
+    const token=input.workflowToken?.trim();
+    if(!token)throw new Error("GITHUB_TOKEN is unavailable for this repository. Ensure the workflow grants pull-requests: read.");
+    return token;
+  }
+  // A workflow GITHUB_TOKEN is scoped to its own repository; never reuse it for an external PR.
+  return input.publicToken?.trim()||undefined;
+}
+
 export async function fetchPublicSourceFile(
   input:string,
   fetchImpl:FetchLike=fetch
