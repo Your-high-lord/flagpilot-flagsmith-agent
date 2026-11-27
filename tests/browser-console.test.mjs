@@ -230,7 +230,7 @@ test("controlled store demo never sends a conversion for an identity outside the
   const page=await browser.newPage();
   await page.addInitScript(()=>{
    window.__flagpilotSdkCalls=[];
-   window.flagsmith={async init(){},async identify(){},getExperimentFlag(){return{enabled:true,value:"Start free trial",experiment:{inExperiment:false}};},trackEvent(name){window.__flagpilotSdkCalls.push(name);},async flushEvents(){}};
+   window.flagsmith={async init(){},async identify(){},getExperimentFlag(){return{enabled:true,value:"Start free trial",experiment:{id:596,name:"FlagPilot signup button test",inExperiment:false}};},trackEvent(name){window.__flagpilotSdkCalls.push(name);},async flushEvents(){}};
   });
   await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
   await page.goto(new URL("store.html",url).href);
@@ -238,6 +238,8 @@ test("controlled store demo never sends a conversion for an identity outside the
   await page.locator("#connect-form button[type=submit]").click();
   await page.locator("#connection-badge").waitFor();
   assert.equal(await page.locator("#connection-badge").innerText(),"CONNECTED · NOT ENROLLED");
+  assert.match(await page.locator("#result-exposure").innerText(),/Not enrolled · FlagPilot signup button test \(#596\)/);
+  assert.match(await page.locator("#conversion-status").innerText(),/Confirm the experiment is running/);
   assert.equal(await page.locator("#conversion-button").isDisabled(),true);
   assert.deepEqual(await page.evaluate(()=>window.__flagpilotSdkCalls),[]);
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
@@ -321,5 +323,24 @@ test("surfaces Flagsmith SDK onError diagnostics in the connection panel",async(
   await page.locator("#connect-form button[type=submit]").click();
   await page.getByText(/Flagsmith API rejected the Environment Key/).waitFor();
   assert.equal(await page.locator("#connection-badge").innerText(),"ERROR");
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+test("distinguishes an enabled feature with no active experiment metadata from an unenrolled identity",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{
+   window.flagsmith={async init(){},async identify(){},getExperimentFlag(){return{enabled:true,value:"control"};},trackEvent(){throw new Error("must not track without enrolment");},async flushEvents(){}};
+  });
+  await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  await page.goto(new URL("store.html",url).href);
+  await page.locator("#environment-key").fill("public-development-sdk-key");
+  await page.locator("#connect-form button[type=submit]").click();
+  await page.locator("#connection-badge").waitFor();
+  assert.equal(await page.locator("#connection-badge").innerText(),"NO ACTIVE EXPERIMENT");
+  assert.equal(await page.locator("#result-exposure").innerText(),"No experiment metadata returned");
+  assert.match(await page.locator("#conversion-status").innerText(),/may still be a draft\/not running/);
+  assert.equal(await page.locator("#conversion-button").isDisabled(),true);
+  assert.equal(await page.locator("#new-visitor").isDisabled(),true,"new visitor cannot fix a missing or draft experiment");
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
