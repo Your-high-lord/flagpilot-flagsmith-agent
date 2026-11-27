@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {startExperiment} from "../src/flagsmith/start.js";
 import type {FlagsmithApi} from "../src/flagsmith/api.js";
+import {verifyMetricConfiguration} from "../src/domain/metric-verification.js";
 
 function fakeApi(statuses:string[]) {
   let reads=0;
@@ -83,4 +84,28 @@ test("aborts without a Flagsmith write when final configuration validation detec
  const f=fakeApi(["created"]);
  await assert.rejects(()=>startExperiment(f.api,596,{...draftOnly,validateBeforeStart:()=>{throw new Error("live feature configuration drift");}}),/configuration drift/);
  assert.equal(f.reads,1);assert.equal(f.writes,0);
+});
+
+test("blocks the start write when the live metric event definition has drifted",async()=>{
+ const f=fakeApi(["created"]);
+ const wrongMetric={id:589,name:"Signup completed",definition:{version:1,event:"checkout_completed"},aggregation:"occurrence",direction:"up"};
+ await assert.rejects(()=>startExperiment(f.api,596,{
+  ...draftOnly,
+  validateBeforeStart:()=>{
+   verifyMetricConfiguration(wrongMetric,{id:589,name:"Signup completed",eventName:"demo_signup_completed"});
+  }
+ }),/event definition/);
+ assert.equal(f.reads,1);
+ assert.equal(f.writes,0);
+});
+test("blocks the start write when the live metric ID has drifted",async()=>{
+ const f=fakeApi(["created"]);
+ const wrongMetric={id:590,name:"Signup completed",definition:{version:1,event:"demo_signup_completed"},aggregation:"occurrence",direction:"up"};
+ await assert.rejects(()=>startExperiment(f.api,596,{
+  ...draftOnly,
+  validateBeforeStart:()=>{
+   verifyMetricConfiguration(wrongMetric,{id:589,name:"Signup completed",eventName:"demo_signup_completed"});
+  }
+ }),/metric ID/);
+ assert.equal(f.writes,0);
 });
