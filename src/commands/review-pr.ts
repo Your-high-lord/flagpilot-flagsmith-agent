@@ -2,21 +2,19 @@ import {mkdir,writeFile,appendFile} from "node:fs/promises";
 import {parsePullRequestUrl} from "../domain/pr-review.js";
 import {reviewPullRequest} from "../ai/pr-reviewer.js";
 import {scanInstrumentationEvidence} from "../domain/instrumentation-evidence.js";
-import {createGitHubApiClient,fetchPublicSourceFile} from "../domain/github-api.js";
+import {createGitHubApiClient,fetchPublicSourceFile,selectGitHubApiToken} from "../domain/github-api.js";
 
 const input=process.env.PULL_REQUEST_URL?.trim();
 if(!input)throw new Error("PULL_REQUEST_URL is required.");
 const target=parsePullRequestUrl(input);
-const workflowRepository=process.env.GITHUB_REPOSITORY?.trim().toLowerCase();
-const targetRepository=`${target.owner}/${target.repo}`.toLowerCase();
-// GITHUB_TOKEN is scoped to this workflow repository. Never send it to a different public repository.
-const token=workflowRepository===targetRepository
-  ?process.env.GITHUB_TOKEN?.trim()
-  :process.env.PUBLIC_GITHUB_TOKEN?.trim();
-if(workflowRepository===targetRepository&&!token)
-  throw new Error("GITHUB_TOKEN is unavailable for this repository. Ensure the workflow grants pull-requests: read.");
-if(workflowRepository!==targetRepository&&!token)
-  console.warn("Reviewing an external public repository without credentials. GitHub's unauthenticated API rate limit is low; configure PUBLIC_GITHUB_TOKEN as a fine-grained read-only token for the target repository if rate-limited.");
+const workflowRepository=process.env.GITHUB_REPOSITORY?.trim();
+const targetRepository=`${target.owner}/${target.repo}`;
+const token=selectGitHubApiToken({
+  workflowRepository,targetRepository,
+  workflowToken:process.env.GITHUB_TOKEN,
+  publicToken:process.env.PUBLIC_GITHUB_TOKEN
+});
+if(!token)console.warn("Reviewing an external public repository without credentials. GitHub's unauthenticated API rate limit is low; configure PUBLIC_GITHUB_TOKEN as a fine-grained read-only token for the target repository if rate-limited.");
 const base=`https://api.github.com/repos/${target.owner}/${target.repo}/pulls/${target.number}`;
 const githubGet=createGitHubApiClient(token);
 type PullRequest={
