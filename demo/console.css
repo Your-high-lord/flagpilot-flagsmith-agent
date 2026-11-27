@@ -13,3 +13,12 @@
 .start-form input:not([type=checkbox]){width:100%;border:1px solid #d4d9e7;border-radius:8px;padding:10px;font:12px var(--font)}
 .start-warning{background:#fff6df;border-radius:8px;padding:10px;font-size:10px;line-height:1.55;color:#775b1c}
 .start-form label:has(input[type=checkbox]){display:flex;gap:8px;align-items:flex-start;margin-top:12px}
+
+/* A single promotion checkbox contains both human attestations. */
+.confirmation-step .combined-confirmation{display:flex;align-items:flex-start;gap:10px;cursor:pointer}
+.confirmation-step .combined-confirmation>input[type=checkbox]{flex:0 0 auto;margin:3px 0 0;accent-color:#6044df;width:16px;height:16px}
+.confirmation-copy{display:grid;gap:7px;min-width:0;font-size:11px;line-height:1.55;color:#626b80}
+.confirmation-copy>strong{font-size:11px;color:#30384d}
+.confirmation-requirement{display:block}
+.confirmation-requirement>b{display:inline-block;min-width:15px;color:#6044df}
+.confirmation-copy>small{display:block;font-size:10px;line-height:1.5;color:#7b8396}
