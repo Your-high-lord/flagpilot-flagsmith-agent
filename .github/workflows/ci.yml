@@ -3,7 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, fix/github-pr-review-api-auth-and-reliability, fix/demo-experiment-enrolment-diagnostics]
+    branches: [main, fix/github-pr-review-api-auth-and-reliability, fix/demo-experiment-enrolment-diagnostics, hardening/protect-secret-bearing-workflows]
   workflow_dispatch:
 permissions:
   contents: read
