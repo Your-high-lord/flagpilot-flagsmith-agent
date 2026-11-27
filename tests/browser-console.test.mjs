@@ -242,3 +242,37 @@ test("controlled store demo never sends a conversion for an identity outside the
   assert.deepEqual(await page.evaluate(()=>window.__flagpilotSdkCalls),[]);
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
+test("legacy saved event names cannot override the fixed demo metric or the event sent to Flagsmith",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{
+   localStorage.setItem("flagpilot-demo-config-v1",JSON.stringify({
+    environmentKey:"public-development-sdk-key",
+    featureName:"fp_signup_button_label_8d4d6f",
+    controlLabel:"Start free trial",
+    eventName:"checkout_completed"
+   }));
+   window.__flagpilotSdkCalls=[];
+   window.flagsmith={
+    async init(){},
+    async identify(){},
+    getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{inExperiment:true}};},
+    trackEvent(name,options){window.__flagpilotSdkCalls.push([name,options]);},
+    async flushEvents(){}
+   };
+  });
+  await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  await page.goto(new URL("store.html",url).href);
+  assert.equal(await page.locator("#event-name").inputValue(),"demo_signup_completed","legacy saved event name must not appear as the active metric");
+  assert.equal(await page.locator("#event-name").isEditable(),false);
+  assert.equal(await page.locator("#feature-name").inputValue(),"fp_signup_button_label_8d4d6f","other saved settings should still restore");
+  await page.locator("#connect-form button[type=submit]").click();
+  await page.locator("#connection-badge").waitFor();
+  assert.equal(await page.locator("#connection-badge").innerText(),"ENROLLED");
+  await page.locator("#conversion-button").click();
+  await page.getByText("Synthetic conversion 'demo_signup_completed' passed to Flagsmith").waitFor();
+  const tracked=await page.evaluate(()=>window.__flagpilotSdkCalls);
+  assert.deepEqual(tracked,[["demo_signup_completed",{metadata:{source:"flagpilot_demo",synthetic:true}}]],"the exact event shown in the UI must be the event actually tracked");
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
