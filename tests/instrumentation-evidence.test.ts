@@ -24,6 +24,14 @@ test("accepts documented browser global",()=>{
  const r=scan('window.flagsmith.trackEvent("CheckoutStarted");');
  assert.equal(r.status,"flagsmith_sdk_call_found");assert.equal(r.matches[0]?.sdk,"window.flagsmith");
 });
+test("accepts the intrinsic globalThis Flagsmith SDK client",()=>{
+ const r=scan('globalThis.flagsmith.trackEvent("CheckoutStarted");');
+ assert.equal(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,true);
+});
+test("rejects a locally shadowed globalThis object",()=>{
+ const r=scan('const globalThis={flagsmith:{trackEvent(){}}}; globalThis.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
 test("rejects commented-out tracking calls",()=>{
  const r=scan('import flagsmith from "@flagsmith/flagsmith"; // flagsmith.trackEvent("CheckoutStarted");');
  assert.equal(r.status,"not_found");assert.equal(r.trackingCallFound,false);
