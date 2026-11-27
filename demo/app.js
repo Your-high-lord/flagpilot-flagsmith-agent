@@ -21,7 +21,8 @@
   const value=String(flag.value??"");if(!value)throw new Error("Flagsmith returned an empty variation; no fallback was fabricated.");
   const label=value==="control"?config.controlLabel:value;
   $("conversion-button").textContent=label;
-  const experiment=flag.experiment&&Number.isSafeInteger(Number(flag.experiment.id))?flag.experiment:null;
+  const candidate=flag.experiment;
+  const experiment=candidate&&typeof candidate==="object"&&typeof candidate.id==="number"&&Number.isSafeInteger(candidate.id)&&candidate.id>0&&typeof candidate.name==="string"&&candidate.name.trim().length>0?candidate:null;
   enrolled=experiment?.inExperiment===true;
   const hasExperiment=!!experiment;
   text("result-value",value);
