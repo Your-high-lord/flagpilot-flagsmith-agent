@@ -117,6 +117,8 @@ GitHub Environment approvals still happen on GitHub's protected deployment revie
 
 The store demo validates that the client-side Environment Key contains only printable ASCII before the Flagsmith SDK sends it as `X-Environment-Key`. If a pasted value contains Unicode, invisible characters or whitespace, the page rejects it locally and asks the operator to copy the client-side key directly from Development → SDK Keys. SDK `onError` messages are also shown in the connection panel; never log or share the key itself.
 
+The store demo distinguishes an enabled feature with no experiment metadata from a known experiment whose current identity is not enrolled. In either case conversion tracking stays disabled until the SDK reports `experiment.inExperiment === true`. When experiment metadata is absent, the page asks the operator to verify that the experiment is running and linked to the selected Development environment before generating another visitor.
+
 The original visitor-facing SDK demo is preserved at `store.html`.
 
 ## Run the workflows
