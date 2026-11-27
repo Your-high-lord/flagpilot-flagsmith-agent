@@ -1,8 +1,53 @@
 (() => {
  const $=id=>document.getElementById(id),STORAGE_KEY="flagpilot-demo-identity-v1",CONFIG_KEY="flagpilot-demo-config-v1";
- const DEMO_CONVERSION_EVENT="demo_signup_completed";
+ const DEMO_CONVERSION_EVENT="demo_signup_completed",ATTEMPT_DB="flagpilot-demo-safety",ATTEMPT_STORE="conversion-attempts";
  let identity=localStorage.getItem(STORAGE_KEY)||`fp-demo-${crypto.randomUUID()}`,connected=false,activeConfig=null,sdkInitialised=false,sdkEnvironmentKey=null,enrolled=false,conversionAttempted=false;
+ // Persist the first identity immediately so reloads and other tabs reuse the same visitor.
+ localStorage.setItem(STORAGE_KEY,identity);
  const text=(id,value)=>{$(id).textContent=value;};
+ function openAttemptDb(){
+  return new Promise((resolve,reject)=>{
+   if(!window.indexedDB){reject(new Error("This browser does not provide IndexedDB; conversion tracking is disabled to prevent duplicate attempts."));return;}
+   let request;
+   try{request=window.indexedDB.open(ATTEMPT_DB,1);}catch(error){reject(error);return;}
+   request.onupgradeneeded=()=>{
+    const db=request.result;
+    if(!db.objectStoreNames.contains(ATTEMPT_STORE))db.createObjectStore(ATTEMPT_STORE,{keyPath:"identity"});
+   };
+   request.onerror=()=>reject(request.error||new Error("Could not open the persistent conversion safety store."));
+   request.onblocked=()=>reject(new Error("The persistent conversion safety store is blocked by another tab. Close older FlagPilot tabs and reconnect."));
+   request.onsuccess=()=>{const db=request.result;db.onversionchange=()=>db.close();resolve(db);};
+  });
+ }
+ async function hasConversionAttempt(eventIdentity){
+  const db=await openAttemptDb();
+  try{
+   return await new Promise((resolve,reject)=>{
+    const tx=db.transaction(ATTEMPT_STORE,"readonly"),request=tx.objectStore(ATTEMPT_STORE).get(eventIdentity);
+    request.onsuccess=()=>resolve(Boolean(request.result));
+    request.onerror=()=>reject(request.error||new Error("Could not read the persistent conversion safety state."));
+    tx.onabort=()=>reject(tx.error||new Error("The persistent conversion safety read was aborted."));
+   });
+  }finally{db.close();}
+ }
+ async function reserveConversionAttempt(eventIdentity){
+  const db=await openAttemptDb();
+  try{
+   return await new Promise((resolve,reject)=>{
+    const tx=db.transaction(ATTEMPT_STORE,"readwrite"),store=tx.objectStore(ATTEMPT_STORE);
+    let reserved=false;
+    const lookup=store.get(eventIdentity);
+    lookup.onsuccess=()=>{
+     if(lookup.result)return;
+     const add=store.add({identity:eventIdentity,attemptedAt:new Date().toISOString()});
+     add.onsuccess=()=>{reserved=true;};
+    };
+    tx.oncomplete=()=>resolve(reserved);
+    tx.onerror=()=>reject(tx.error||new Error("Could not reserve this identity's conversion attempt."));
+    tx.onabort=()=>reject(tx.error||new Error("The conversion attempt reservation was aborted."));
+   });
+  }finally{db.close();}
+ }
  function readConfig(){return{environmentKey:$("environment-key").value.trim(),featureName:$("feature-name").value.trim(),controlLabel:$("control-label").value.trim(),eventName:DEMO_CONVERSION_EVENT};}
  async function connect(config){
   if(!window.flagsmith)throw new Error("Flagsmith SDK did not load. Refresh and try again.");
@@ -25,6 +70,8 @@
   const experiment=candidate&&typeof candidate==="object"&&typeof candidate.id==="number"&&Number.isSafeInteger(candidate.id)&&candidate.id>0&&typeof candidate.name==="string"&&candidate.name.trim().length>0?candidate:null;
   enrolled=experiment?.inExperiment===true;
   const hasExperiment=!!experiment;
+  // If durable deduplication state cannot be read, connection fails closed.
+  conversionAttempted=enrolled?await hasConversionAttempt(identity):false;
   text("result-value",value);
   text("result-exposure",enrolled
     ?`Enrolled · ${experiment.name} (#${experiment.id})`
@@ -33,9 +80,11 @@
       :"No experiment metadata returned");
   text("connection-badge",enrolled?"ENROLLED":hasExperiment?"CONNECTED · NOT ENROLLED":"NO ACTIVE EXPERIMENT");
   $("connection-badge").className=enrolled?"status status-ready":"status status-off";$("identity-badge").className="status status-ready";
-  connected=true;$("conversion-button").disabled=!enrolled;$("new-visitor").disabled=!hasExperiment;
+  connected=true;$("conversion-button").disabled=!enrolled||conversionAttempted;$("new-visitor").disabled=!hasExperiment;
   text("conversion-status",enrolled
-    ?`Loaded '${label}' and confirmed enrolment in ${experiment.name} (#${experiment.id}).`
+    ?conversionAttempted
+      ?`A conversion attempt for ${identity} is already recorded. Generate a new synthetic visitor before testing another conversion.`
+      :`Loaded '${label}' and confirmed enrolment in ${experiment.name} (#${experiment.id}).`
     :hasExperiment
       ?`Flagsmith returned experiment ${experiment.name} (#${experiment.id}), but this visitor is not enrolled. Confirm the experiment is running in this Development environment and check its rollout/audience before generating another visitor. No conversion can be sent until enrolment is confirmed.`
       :`The feature connection succeeded and '${label}' was loaded, but Flagsmith returned no experiment metadata. The experiment may still be a draft/not running or may not be linked to this feature in this environment. Verify the experiment is running before generating visitors. No exposure or conversion was recorded.`);
@@ -43,7 +92,32 @@
  }
  async function newVisitor(){identity=`fp-demo-${crypto.randomUUID()}`;localStorage.setItem(STORAGE_KEY,identity);conversionAttempted=false;text("identity-value",identity);connected=false;enrolled=false;$("conversion-button").disabled=true;$("new-visitor").disabled=true;if(!activeConfig){text("conversion-status","New synthetic visitor created. Connect Flagsmith to evaluate.");return;}try{await connect(activeConfig);}catch(e){text("connection-error",e instanceof Error?e.message:String(e));text("conversion-status","New identity could not be evaluated.");}}
  $("connect-form").addEventListener("submit",async e=>{e.preventDefault();try{await connect(readConfig());}catch(error){connected=false;$("conversion-button").disabled=true;$("new-visitor").disabled=true;text("connection-badge","ERROR");$("connection-badge").className="status status-off";$("connection-error").textContent=error instanceof Error?error.message:String(error);text("result-exposure","Not verified");text("conversion-status","No conversion has been sent.");}});
- $("conversion-button").addEventListener("click",async()=>{if(!connected||!enrolled||!activeConfig||conversionAttempted)return;conversionAttempted=true;$("conversion-button").disabled=true;$("new-visitor").disabled=true;const eventIdentity=identity;try{window.flagsmith.trackEvent(DEMO_CONVERSION_EVENT,{metadata:{source:"flagpilot_demo",synthetic:true}});await window.flagsmith.flushEvents();text("result-event","SDK flush completed");text("conversion-status",`One synthetic conversion attempt '${DEMO_CONVERSION_EVENT}' was flushed for ${eventIdentity}. Verify ingestion in the warehouse; do not retry this identity.`);}catch(e){text("result-event","Delivery uncertain · do not retry");text("conversion-status",`The conversion attempt for ${eventIdentity} could not be confirmed: ${e instanceof Error?e.message:String(e)}. Do not retry this identity because Flagsmith may already have received the event. Create a new synthetic visitor for another test.`);}finally{$("new-visitor").disabled=false;}});
+ $("conversion-button").addEventListener("click",async()=>{
+  if(!connected||!enrolled||!activeConfig||conversionAttempted)return;
+  conversionAttempted=true;$("conversion-button").disabled=true;$("new-visitor").disabled=true;
+  const eventIdentity=identity;let reserved=false;
+  try{
+   // The unique IndexedDB key is reserved atomically before any SDK call; browser tabs share this ledger.
+   reserved=await reserveConversionAttempt(eventIdentity);
+   if(!reserved){
+    text("result-event","Already attempted for this identity");
+    text("conversion-status",`A conversion attempt for ${eventIdentity} is already recorded in this browser. No second event was sent. Generate a new synthetic visitor for another test.`);
+    return;
+   }
+   window.flagsmith.trackEvent(DEMO_CONVERSION_EVENT,{metadata:{source:"flagpilot_demo",synthetic:true}});
+   await window.flagsmith.flushEvents();
+   text("result-event","SDK flush completed");
+   text("conversion-status",`One synthetic conversion attempt '${DEMO_CONVERSION_EVENT}' was flushed for ${eventIdentity}. Verify ingestion in the warehouse; do not retry this identity.`);
+  }catch(e){
+   if(!reserved){
+    text("result-event","Persistent safety reservation failed");
+    text("conversion-status",`No conversion was sent for ${eventIdentity} because its persistent one-shot reservation could not be stored: ${e instanceof Error?e.message:String(e)}. Resolve browser storage access before trying again.`);
+   }else{
+    text("result-event","Delivery uncertain · do not retry");
+    text("conversion-status",`The conversion attempt for ${eventIdentity} could not be confirmed: ${e instanceof Error?e.message:String(e)}. The one-shot reservation remains stored because Flagsmith may already have received the event. Create a new synthetic visitor for another test.`);
+   }
+  }finally{$("new-visitor").disabled=false;}
+ });
  $("new-visitor").addEventListener("click",()=>{void newVisitor();});text("identity-value",identity);
  try{const saved=JSON.parse(localStorage.getItem(CONFIG_KEY)||"null");if(saved&&typeof saved==="object"){$("environment-key").value=saved.environmentKey||"";$("feature-name").value=saved.featureName||"fp_signup_cta_test";$("control-label").value=saved.controlLabel||"Start free trial";$("event-name").value=DEMO_CONVERSION_EVENT;}}catch{}
 })();

@@ -114,9 +114,29 @@ test("rejects replacement of globalThis.flagsmith before a call",()=>{
  const r=scan('declare const fake:any; globalThis.flagsmith=fake; globalThis.flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
 });
-test("rejects reflective replacement of window.flagsmith",()=>{
- const r=scan('declare const fake:any; Reflect.set(window,"flagsmith",fake); window.flagsmith.trackEvent("CheckoutStarted");');
+test("rejects replacement of window.flagsmith through a global alias",()=>{
+ const r=scan('declare const fake:any; const globalAlias=window; globalAlias.flagsmith=fake; window.flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects replacement through a reassigned global alias",()=>{
+ const r=scan('declare const fake:any, other:any; let globalAlias=window; globalAlias=other; globalAlias.flagsmith=fake; window.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects reflective replacement through a chained global alias",()=>{
+ const r=scan('declare const fake:any; const root=globalThis; const alias=root; Reflect.set(alias,"flagsmith",fake); window.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects Object.assign replacement through a global alias",()=>{
+ const r=scan('declare const fake:any; const root=window; Object.assign(root,{flagsmith:fake}); window.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("does not reject unrelated Object and Reflect operations",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; const unrelated:any={}; Object.assign(unrelated,{x:1}); Object.defineProperty(unrelated,"trackEvent",{value:()=>{}}); Reflect.set(unrelated,"trackEvent",()=>{}); flagsmith.trackEvent("CheckoutStarted");');
+ assert.equal(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,true);
+});
+test("does not reject harmless Object.assign on a verified SDK client",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; Object.assign(flagsmith,{metadata:"safe"}); flagsmith.trackEvent("CheckoutStarted");');
+ assert.equal(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,true);
 });
 test("rejects direct replacement of the SDK trackEvent method",()=>{
  const r=scan('import flagsmith from "@flagsmith/flagsmith"; declare const otherService:any; flagsmith.trackEvent=otherService.trackEvent; flagsmith.trackEvent("CheckoutStarted");');

@@ -48,63 +48,76 @@ function propertyName(node:ts.Expression):string|undefined{
     (ts.isStringLiteral(node.argumentExpression)||ts.isNoSubstitutionTemplateLiteral(node.argumentExpression)))return node.argumentExpression.text;
   return undefined;
 }
-function hasGlobalSdkReplacement(sourceFile:ts.SourceFile):boolean{
- let replaced=false;
- const globalReceiver=(node:ts.Expression)=>{node=unwrap(node);return ts.isIdentifier(node)&&["window","globalThis","self"].includes(node.text);};
- const visit=(node:ts.Node):void=>{
-  if(ts.isBinaryExpression(node)&&ASSIGNMENT_OPERATORS.has(node.operatorToken.kind)&&
-   (ts.isPropertyAccessExpression(node.left)||ts.isElementAccessExpression(node.left))&&propertyName(node.left)==="flagsmith"&&globalReceiver(node.left.expression))replaced=true;
-  if(ts.isDeleteExpression(node)&&(ts.isPropertyAccessExpression(node.expression)||ts.isElementAccessExpression(node.expression))&&propertyName(node.expression)==="flagsmith"&&globalReceiver(node.expression.expression))replaced=true;
-  if(ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)){
-   const receiver=unwrap(node.expression.expression),method=node.expression.name.text,args=node.arguments;
-   if(ts.isIdentifier(receiver)&&["Object","Reflect"].includes(receiver.text)&&["defineProperty","defineProperties","assign","setPrototypeOf","set","deleteProperty"].includes(method))replaced=true;
-   else if(globalReceiver(receiver)){
-    const key=args[1],keyMatch=!!key&&(ts.isStringLiteral(key)||ts.isNoSubstitutionTemplateLiteral(key))&&key.text==="flagsmith";
-    const objectHasKey=(arg:ts.Expression|undefined)=>{if(!arg)return false;const x=unwrap(arg);return ts.isObjectLiteralExpression(x)&&x.properties.some(p=>(ts.isPropertyAssignment(p)||ts.isMethodDeclaration(p)||ts.isGetAccessorDeclaration(p)||ts.isSetAccessorDeclaration(p))&&(ts.isIdentifier(p.name)||ts.isStringLiteral(p.name))&&p.name.text==="flagsmith");};
-    if(["defineProperty","set","deleteProperty"].includes(method)&&keyMatch)replaced=true;
-    if(method==="defineProperties"&&objectHasKey(key))replaced=true;
-    if(method==="assign"&&args.slice(1).some(objectHasKey))replaced=true;
-   }
-  }
-  ts.forEachChild(node,visit);
- };
- visit(sourceFile);return replaced;
+function propertyMayBe(node:ts.Expression|undefined,key:string):boolean{
+  if(!node)return true;
+  const name=propertyName(node);
+  return name===undefined||name===key;
 }
-function hasTrackEventMutation(sourceFile:ts.SourceFile):boolean{
+function objectMayContainProperty(node:ts.Expression|undefined,key:string):boolean{
+  if(!node)return true;
+  node=unwrap(node);
+  if(!ts.isObjectLiteralExpression(node))return true;
+  for(const property of node.properties){
+    if(ts.isSpreadAssignment(property))return true;
+    if(ts.isPropertyAssignment(property)||ts.isMethodDeclaration(property)||ts.isGetAccessorDeclaration(property)||ts.isSetAccessorDeclaration(property)){
+      const name=property.name;
+      if(ts.isComputedPropertyName(name)){
+        const expression=unwrap(name.expression);
+        if((ts.isStringLiteral(expression)||ts.isNoSubstitutionTemplateLiteral(expression))&&expression.text===key)return true;
+        if(!ts.isStringLiteral(expression)&&!ts.isNoSubstitutionTemplateLiteral(expression))return true;
+      }else if((ts.isIdentifier(name)||ts.isStringLiteral(name)||ts.isNumericLiteral(name))&&name.text===key)return true;
+    }else return true;
+  }
+  return false;
+}
+function hasGlobalSdkReplacement(
+  sourceFile:ts.SourceFile,
+  isGlobalObject:(node:ts.Expression)=>boolean,
+  reflectionApi:(node:ts.Expression)=>"Object"|"Reflect"|undefined
+):boolean{
+  let replaced=false;
+  const visit=(node:ts.Node):void=>{
+    if(ts.isBinaryExpression(node)&&ASSIGNMENT_OPERATORS.has(node.operatorToken.kind)&&
+      (ts.isPropertyAccessExpression(node.left)||ts.isElementAccessExpression(node.left))&&
+      propertyName(node.left)==="flagsmith"&&isGlobalObject(node.left.expression))replaced=true;
+    if(ts.isDeleteExpression(node)&&
+      (ts.isPropertyAccessExpression(node.expression)||ts.isElementAccessExpression(node.expression))&&
+      propertyName(node.expression)==="flagsmith"&&isGlobalObject(node.expression.expression))replaced=true;
+    if(ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)){
+      const api=reflectionApi(node.expression.expression),method=node.expression.name.text,args=node.arguments,target=args[0];
+      if(api&&target&&isGlobalObject(target)){
+        if(method==="setPrototypeOf")replaced=true;
+        else if(method==="assign"&&args.slice(1).some(source=>objectMayContainProperty(source,"flagsmith")))replaced=true;
+        else if((method==="defineProperty"||method==="set"||method==="deleteProperty")&&propertyMayBe(args[1],"flagsmith"))replaced=true;
+        else if(method==="defineProperties"&&objectMayContainProperty(args[1],"flagsmith"))replaced=true;
+      }
+    }
+    ts.forEachChild(node,visit);
+  };
+  visit(sourceFile);
+  return replaced;
+}
+function hasTrackEventMutation(
+  sourceFile:ts.SourceFile,
+  isSdkClient:(node:ts.Expression)=>boolean,
+  reflectionApi:(node:ts.Expression)=>"Object"|"Reflect"|undefined
+):boolean{
   let mutated=false;
   const visit=(node:ts.Node):void=>{
     if(ts.isBinaryExpression(node)&&ASSIGNMENT_OPERATORS.has(node.operatorToken.kind)&&
       (ts.isPropertyAccessExpression(node.left)||ts.isElementAccessExpression(node.left))&&
-      propertyName(node.left)==="trackEvent")mutated=true;
+      propertyName(node.left)==="trackEvent"&&isSdkClient(node.left.expression))mutated=true;
     if(ts.isDeleteExpression(node)&&
       (ts.isPropertyAccessExpression(node.expression)||ts.isElementAccessExpression(node.expression))&&
-      propertyName(node.expression)==="trackEvent")mutated=true;
+      propertyName(node.expression)==="trackEvent"&&isSdkClient(node.expression.expression))mutated=true;
     if(ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)){
-      const receiver=unwrap(node.expression.expression),method=node.expression.name.text;
-      const args=node.arguments;
-      const keyArg=args[1];
-      const keyIsTrackEvent=!!keyArg&&(ts.isStringLiteral(keyArg)||ts.isNoSubstitutionTemplateLiteral(keyArg))&&keyArg.text==="trackEvent";
-      const globalObject=ts.isIdentifier(receiver)&&["Object","Reflect"].includes(receiver.text);
-      // Dynamic reflective mutation cannot be resolved reliably in a bounded,
-      // source-only scan. Conservatively invalidate positive evidence for these APIs.
-      if(globalObject&&(
-        (receiver as ts.Identifier).text==="Object"&&["defineProperty","defineProperties","assign","setPrototypeOf"].includes(method)||
-        (receiver as ts.Identifier).text==="Reflect"&&["set","deleteProperty","defineProperty","setPrototypeOf"].includes(method)
-      ))mutated=true;
-      const descriptorMapHasTrackEvent=!!keyArg&&ts.isObjectLiteralExpression(unwrap(keyArg))&&
-        (unwrap(keyArg) as ts.ObjectLiteralExpression).properties.some(property=>
-          (ts.isPropertyAssignment(property)||ts.isMethodDeclaration(property)||ts.isGetAccessorDeclaration(property)||ts.isSetAccessorDeclaration(property))&&
-          (ts.isIdentifier(property.name)||ts.isStringLiteral(property.name)||ts.isNumericLiteral(property.name))&&property.name.text==="trackEvent");
-      if(globalObject&&(
-        ((method==="defineProperty"||method==="set"||method==="deleteProperty")&&keyIsTrackEvent)||
-        (method==="defineProperties"&&descriptorMapHasTrackEvent)||
-        (method==="assign"&&args.slice(1).some(arg=>{
-          const value=unwrap(arg);
-          return ts.isObjectLiteralExpression(value)&&value.properties.some(property=>
-            (ts.isPropertyAssignment(property)||ts.isMethodDeclaration(property)||ts.isGetAccessorDeclaration(property)||ts.isSetAccessorDeclaration(property))&&
-            (ts.isIdentifier(property.name)||ts.isStringLiteral(property.name)||ts.isNumericLiteral(property.name))&&property.name.text==="trackEvent");
-        }))
-      ))mutated=true;
+      const api=reflectionApi(node.expression.expression),method=node.expression.name.text,args=node.arguments,target=args[0];
+      if(api&&target&&isSdkClient(target)){
+        if(method==="setPrototypeOf")mutated=true;
+        else if(method==="assign"&&args.slice(1).some(source=>objectMayContainProperty(source,"trackEvent")))mutated=true;
+        else if((method==="defineProperty"||method==="set"||method==="deleteProperty")&&propertyMayBe(args[1],"trackEvent"))mutated=true;
+        else if(method==="defineProperties"&&objectMayContainProperty(args[1],"trackEvent"))mutated=true;
+      }
     }
     ts.forEachChild(node,visit);
   };
@@ -173,9 +186,6 @@ export function scanInstrumentationEvidence(input:{
     // Fail closed on semantic errors that mean a type-only binding is used as a runtime value.
     const runtimeImportErrors=semantic.filter(diagnostic=>[1361,1362,1363,1364,1365,2588,2632,2693].includes(diagnostic.code));
     if(syntactic.length>0||runtimeImportErrors.length>0){failedFiles.add(entry.path);continue;}
-    if(hasTrackEventMutation(sourceFile))sdkMethodMutated=true;
-    if(hasGlobalSdkReplacement(sourceFile))globalSdkReplaced=true;
-
     const defaultImports=new Set<ts.Symbol>();
     const factoryImports=new Set<ts.Symbol>();
     const namespaceImports=new Set<ts.Symbol>();
@@ -236,12 +246,37 @@ export function scanInstrumentationEvidence(input:{
         (declaration.getSourceFile().fileName===shimPath||
           /(?:^|[\\/])lib\.(?:dom|es20\d\d|esnext).*\.d\.ts$/i.test(declaration.getSourceFile().fileName)));
     };
+    const isGlobalObjectAlias=(node:ts.Expression,seen=new Set<ts.Symbol>()):boolean=>{
+      node=unwrap(node);
+      if(ts.isPropertyAccessExpression(node)&&node.name.text==="window"&&ts.isIdentifier(node.expression)&&
+        node.expression.text==="globalThis"&&isStandardGlobal(node.expression))return true;
+      if(!ts.isIdentifier(node))return false;
+      if(["window","globalThis","self"].includes(node.text)&&isStandardGlobal(node))return true;
+      const symbol=symbolOf(node);
+      if(!symbol||seen.has(symbol))return false;
+      seen.add(symbol);
+      return (symbol.declarations??[]).some(declaration=>
+        ts.isVariableDeclaration(declaration)&&!!declaration.initializer&&isGlobalObjectAlias(declaration.initializer,seen));
+    };
+    const reflectionApi=(node:ts.Expression,seen=new Set<ts.Symbol>()):"Object"|"Reflect"|undefined=>{
+      node=unwrap(node);
+      if(!ts.isIdentifier(node))return undefined;
+      if((node.text==="Object"||node.text==="Reflect")&&isStandardGlobal(node))return node.text;
+      const symbol=symbolOf(node);
+      if(!symbol||seen.has(symbol))return undefined;
+      seen.add(symbol);
+      for(const declaration of symbol.declarations??[]){
+        if(ts.isVariableDeclaration(declaration)&&declaration.initializer){
+          const api=reflectionApi(declaration.initializer,seen);if(api)return api;
+        }
+      }
+      return undefined;
+    };
     const sdkOfClient=(node:ts.Expression,seen=new Set<ts.Symbol>()):InstrumentationSourceMatch["sdk"]|undefined=>{
       node=unwrap(node);
       if(ts.isPropertyAccessExpression(node)){
         if(node.name.text==="default"&&isNamespace(node.expression))return SDK_PACKAGE;
-        if(node.name.text==="flagsmith"&&ts.isIdentifier(node.expression)&&
-          ["window","globalThis"].includes(node.expression.text)&&isStandardGlobal(node.expression))return "window.flagsmith";
+        if(node.name.text==="flagsmith"&&isGlobalObjectAlias(node.expression))return "window.flagsmith";
         return undefined;
       }
       if(ts.isCallExpression(node)&&isFactoryCall(node.expression))return SDK_PACKAGE;
@@ -262,6 +297,9 @@ export function scanInstrumentationEvidence(input:{
       }
       return undefined;
     };
+
+    if(hasTrackEventMutation(sourceFile,node=>!!sdkOfClient(node),reflectionApi))sdkMethodMutated=true;
+    if(hasGlobalSdkReplacement(sourceFile,isGlobalObjectAlias,reflectionApi))globalSdkReplaced=true;
 
     const visit=(node:ts.Node):void=>{
       if((ts.isStringLiteral(node)||ts.isNoSubstitutionTemplateLiteral(node))&&node.text===eventName)eventLiteralFound=true;
