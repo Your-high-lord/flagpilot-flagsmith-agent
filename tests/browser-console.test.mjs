@@ -222,7 +222,7 @@ test("controlled store demo sends the exact fixed synthetic conversion event onl
   await page.locator("#connection-badge").waitFor();
   assert.equal(await page.locator("#connection-badge").innerText(),"ENROLLED");
   await page.locator("#conversion-button").click();
-  await page.getByText("Synthetic conversion 'demo_signup_completed' passed to Flagsmith").waitFor();
+  await page.getByText("One synthetic conversion attempt 'demo_signup_completed' was flushed").waitFor();
   const calls=await page.evaluate(()=>window.__flagpilotSdkCalls);
   assert.deepEqual(calls.find(call=>call[0]==="trackEvent"),["trackEvent","demo_signup_completed",{metadata:{source:"flagpilot_demo",synthetic:true}}]);
   assert.ok(calls.some(call=>call[0]==="flushEvents"));
@@ -239,7 +239,7 @@ test("controlled store demo permits only one conversion attempt per enrolled ide
   await page.goto(new URL("store.html",url).href);await page.locator("#environment-key").fill("public-development-sdk-key");await page.locator("#connect-form button[type=submit]").click();
   await page.locator("#conversion-button").waitFor();await page.locator("#conversion-button").click();await page.locator("#conversion-button").click();await page.waitForTimeout(30);
   assert.equal(await page.evaluate(()=>window.__trackCount),1);assert.equal(await page.evaluate(()=>window.__flushCount),1);assert.equal(await page.locator("#conversion-button").isDisabled(),true);
-  await page.locator("#new-visitor").click();await page.locator("#conversion-button").waitFor();await page.locator("#conversion-button").click();await page.waitForTimeout(30);
+  await page.locator("#new-visitor").click();await page.waitForFunction(()=>document.querySelector("#conversion-button")&&!document.querySelector("#conversion-button").disabled);await page.locator("#conversion-button").click();await page.waitForTimeout(30);
   assert.equal(await page.evaluate(()=>window.__trackCount),2,"a new synthetic identity gets one new attempt");
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
@@ -294,7 +294,7 @@ test("legacy saved event names cannot override the fixed demo metric or the even
   const savedConfig=await page.evaluate(()=>JSON.parse(localStorage.getItem("flagpilot-demo-config-v1")));
   assert.equal(savedConfig.eventName,"demo_signup_completed","connecting must overwrite the legacy event name with the fixed metric");
   await page.locator("#conversion-button").click();
-  await page.getByText("Synthetic conversion 'demo_signup_completed' passed to Flagsmith").waitFor();
+  await page.getByText("One synthetic conversion attempt 'demo_signup_completed' was flushed").waitFor();
   const tracked=await page.evaluate(()=>window.__flagpilotSdkCalls);
   assert.deepEqual(tracked,[["demo_signup_completed",{metadata:{source:"flagpilot_demo",synthetic:true}}]],"the exact event shown in the UI must be the event actually tracked");
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
