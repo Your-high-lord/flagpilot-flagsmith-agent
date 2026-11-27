@@ -36,11 +36,17 @@
    return await new Promise((resolve,reject)=>{
     const tx=db.transaction(ATTEMPT_STORE,"readwrite"),store=tx.objectStore(ATTEMPT_STORE);
     let reserved=false;
-    const lookup=store.get(eventIdentity);
-    lookup.onsuccess=()=>{
-     if(lookup.result)return;
-     const add=store.add({identity:eventIdentity,attemptedAt:new Date().toISOString()});
-     add.onsuccess=()=>{reserved=true;};
+    // A single unique-key add is the atomic reservation. IndexedDB serializes
+    // read/write transactions across tabs; a duplicate key is an expected
+    // "already reserved" result, not a failed transaction.
+    const add=store.add({identity:eventIdentity,attemptedAt:new Date().toISOString()});
+    add.onsuccess=()=>{reserved=true;};
+    add.onerror=event=>{
+     if(add.error?.name==="ConstraintError"){
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+     }
     };
     tx.oncomplete=()=>resolve(reserved);
     tx.onerror=()=>reject(tx.error||new Error("Could not reserve this identity's conversion attempt."));
