@@ -202,7 +202,7 @@ test("controlled store demo sends the exact fixed synthetic conversion event onl
    window.flagsmith={
     async init(options){window.__flagpilotSdkCalls.push(["init",options.enableEvents]);},
     async identify(identity){window.__flagpilotSdkCalls.push(["identify",identity]);},
-    getExperimentFlag(name){window.__flagpilotSdkCalls.push(["getExperimentFlag",name]);return{enabled:true,value:"Try it free",experiment:{inExperiment:true}};},
+    getExperimentFlag(name){window.__flagpilotSdkCalls.push(["getExperimentFlag",name]);return{enabled:true,value:"Try it free",experiment:{id:596,name:"FlagPilot signup button test",inExperiment:true}};},
     trackEvent(name,options){window.__flagpilotSdkCalls.push(["trackEvent",name,options]);},
     async flushEvents(){window.__flagpilotSdkCalls.push(["flushEvents"]);}
    };
@@ -259,7 +259,7 @@ test("legacy saved event names cannot override the fixed demo metric or the even
    window.flagsmith={
     async init(){},
     async identify(){},
-    getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{inExperiment:true}};},
+    getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{id:596,name:"FlagPilot signup button test",inExperiment:true}};},
     trackEvent(name,options){window.__flagpilotSdkCalls.push([name,options]);},
     async flushEvents(){}
    };
@@ -284,7 +284,7 @@ test("rejects hidden Unicode in the Environment Key before calling the Flagsmith
  const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
  try{
   const page=await browser.newPage();
-  await page.addInitScript(()=>{window.__initCalls=0;window.flagsmith={async init(){window.__initCalls++;},async identify(){},getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{inExperiment:true}};}};});
+  await page.addInitScript(()=>{window.__initCalls=0;window.flagsmith={async init(){window.__initCalls++;},async identify(){},getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{id:596,name:"FlagPilot signup button test",inExperiment:true}};}};});
   await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
   await page.goto(new URL("store.html",url).href);
   await page.locator("#environment-key").fill("public-sdk-key-"+String.fromCharCode(0x200B)+"-hidden");
@@ -300,7 +300,7 @@ test("passes a clean printable-ASCII client key unchanged to Flagsmith",async()=
  const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
  try{
   const page=await browser.newPage();
-  await page.addInitScript(()=>{window.__initOptions=null;window.flagsmith={async init(options){window.__initOptions=options;},async identify(){},getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{inExperiment:true}};}};});
+  await page.addInitScript(()=>{window.__initOptions=null;window.flagsmith={async init(options){window.__initOptions=options;},async identify(){},getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{id:596,name:"FlagPilot signup button test",inExperiment:true}};}};});
   await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
   await page.goto(new URL("store.html",url).href);
   const validKey="client-side-KEY_1234567890-._~+/=";
@@ -342,5 +342,30 @@ test("distinguishes an enabled feature with no active experiment metadata from a
   assert.match(await page.locator("#conversion-status").innerText(),/may still be a draft\/not running/);
   assert.equal(await page.locator("#conversion-button").isDisabled(),true);
   assert.equal(await page.locator("#new-visitor").isDisabled(),true,"new visitor cannot fix a missing or draft experiment");
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+test("fails closed for malformed experiment metadata even when inExperiment is true",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const invalidExperiments=[
+   {inExperiment:true},
+   {id:0,name:"Zero ID experiment",inExperiment:true},
+   {id:"596",name:"String ID experiment",inExperiment:true},
+   {id:596,name:"   ",inExperiment:true}
+  ];
+  for(const experiment of invalidExperiments){
+   const page=await browser.newPage();
+   await page.addInitScript(({experiment})=>{
+    window.flagsmith={async init(){},async identify(){},getExperimentFlag(){return{enabled:true,value:"Try it free",experiment};},trackEvent(){throw new Error("must not track without valid experiment metadata");},async flushEvents(){}};
+   },{experiment});
+   await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+   await page.goto(new URL("store.html",url).href);
+   await page.locator("#environment-key").fill("public-development-sdk-key");
+   await page.locator("#connect-form button[type=submit]").click();
+   await page.locator("#connection-badge").waitFor();
+   assert.equal(await page.locator("#connection-badge").innerText(),"NO ACTIVE EXPERIMENT");
+   assert.equal(await page.locator("#conversion-button").isDisabled(),true);
+   await page.close();
+  }
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
