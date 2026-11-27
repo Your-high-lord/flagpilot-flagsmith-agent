@@ -23,7 +23,13 @@ test("GitHub API client refuses to send credentials to another host",async()=>{
   await assert.rejects(()=>get("https://raw.githubusercontent.com/Flagsmith/flagsmith/main/README.md"),/only be sent to/);
   assert.equal(called,false);
 });
-test("GitHub API client supports unauthenticated public reads without leaking an empty bearer token",async()=>{\n  let seen:RequestInit|undefined;\n  const fake:FetchLike=async(_url,init)=>{seen=init;return json({ok:true});};\n  const get=createGitHubApiClient(undefined,fake,async()=>{});\n  assert.deepEqual(await get<{ok:boolean}>(endpoint),{ok:true});\n  assert.equal(new Headers(seen?.headers).has("Authorization"),false);\n});
+test("GitHub API client supports unauthenticated public reads without leaking an empty bearer token",async()=>{
+  let seen:RequestInit|undefined;
+  const fake:FetchLike=async(_url,init)=>{seen=init;return json({ok:true});};
+  const get=createGitHubApiClient(undefined,fake,async()=>{});
+  assert.deepEqual(await get<{ok:boolean}>(endpoint),{ok:true});
+  assert.equal(new Headers(seen?.headers).has("Authorization"),false);
+});
 test("GitHub API client retries a primary rate-limit 403 and succeeds",async()=>{
   let calls=0,waits:number[]=[];
   const fake:FetchLike=async()=>++calls===1
@@ -86,4 +92,14 @@ test("public source retrieval rejects non-raw hosts",async()=>{
 test("public source retrieval reports deleted or inaccessible files clearly",async()=>{
   const fake:FetchLike=async()=>new Response("Not Found",{status:404});
   await assert.rejects(()=>fetchPublicSourceFile("https://raw.githubusercontent.com/Flagsmith/flagsmith/main/deleted.ts",fake),/HTTP 404/);
+});
+
+test("unauthenticated rate-limit errors explain the required optional secret",async()=>{
+  const fake:FetchLike=async()=>json({message:"API rate limit exceeded"},403,{"x-ratelimit-remaining":"0"});
+  const get=createGitHubApiClient(undefined,fake,async()=>{});
+  await assert.rejects(()=>get(endpoint),(error:unknown)=>{
+    assert.ok(error instanceof GitHubApiError);
+    assert.match(error.message,/PUBLIC_GITHUB_TOKEN/);
+    return true;
+  });
 });
