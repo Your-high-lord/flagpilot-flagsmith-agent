@@ -278,3 +278,48 @@ test("legacy saved event names cannot override the fixed demo metric or the even
   assert.deepEqual(tracked,[["demo_signup_completed",{metadata:{source:"flagpilot_demo",synthetic:true}}]],"the exact event shown in the UI must be the event actually tracked");
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
+test("rejects hidden Unicode in the Environment Key before calling the Flagsmith SDK",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{window.__initCalls=0;window.flagsmith={async init(){window.__initCalls++;},async identify(){},getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{inExperiment:true}};}};});
+  await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  await page.goto(new URL("store.html",url).href);
+  await page.locator("#environment-key").fill("public-sdk-key-\\u200B-hidden");
+  await page.locator("#connect-form button[type=submit]").click();
+  await page.getByText(/Environment Key contains whitespace, hidden characters or non-ASCII text/).waitFor();
+  assert.equal(await page.evaluate(()=>window.__initCalls),0,"invalid key must be rejected before an HTTP header is set");
+  assert.equal(await page.locator("#connection-badge").innerText(),"ERROR");
+  assert.equal(await page.locator("#conversion-button").isDisabled(),true);
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+
+test("passes a clean printable-ASCII client key unchanged to Flagsmith",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{window.__initOptions=null;window.flagsmith={async init(options){window.__initOptions=options;},async identify(){},getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{inExperiment:true}};}};});
+  await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  await page.goto(new URL("store.html",url).href);
+  const validKey="client-side-KEY_1234567890-._~+/=";
+  await page.locator("#environment-key").fill(validKey);
+  await page.locator("#connect-form button[type=submit]").click();
+  await page.getByText("ENROLLED",{exact:true}).waitFor();
+  const options=await page.evaluate(()=>({environmentID:window.__initOptions.environmentID,enableEvents:window.__initOptions.enableEvents,onErrorType:typeof window.__initOptions.onError}));
+  assert.deepEqual(options,{environmentID:validKey,enableEvents:true,onErrorType:"function"});
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+
+test("surfaces Flagsmith SDK onError diagnostics in the connection panel",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{window.flagsmith={async init(options){options.onError(new Error("Flagsmith API rejected the Environment Key (HTTP 401)."));throw new Error("Flagsmith API rejected the Environment Key (HTTP 401).");},async identify(){},getExperimentFlag(){return null;}};});
+  await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  await page.goto(new URL("store.html",url).href);
+  await page.locator("#environment-key").fill("client-side-KEY_1234567890");
+  await page.locator("#connect-form button[type=submit]").click();
+  await page.getByText(/Flagsmith API rejected the Environment Key/).waitFor();
+  assert.equal(await page.locator("#connection-badge").innerText(),"ERROR");
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
