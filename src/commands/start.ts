@@ -61,7 +61,7 @@ const result=await startExperiment(api,id,{
       allowedStatuses:["created","draft"]
     });
   }
-
+});
 const summary=[
   "## FlagPilot · Verified experiment start",
   "- **Provisioning run:** "+required("PROVISION_RUN_ID"),
