@@ -25,6 +25,7 @@ concurrency:
 jobs:
   setup:
     name: Create or reuse dedicated environment
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     environment:
       name: flagsmith-create
@@ -37,7 +38,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - name: Install Flagsmith CLI v2
         uses: Flagsmith/setup-cli@c7154aaa37dff8aca0b66afc1e6722e7ad00c115 # v1.0.0
         with:

@@ -14,13 +14,16 @@ concurrency:
 jobs:
   plan:
     name: AI plan (no Flagsmith writes)
+    if: ${{ github.ref == 'refs/heads/main' }}
+    environment:
+      name: github-pages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - name: Generate structured experiment proposal
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -38,6 +41,7 @@ jobs:
   create:
     name: Create feature, metric and draft experiment
     needs: [plan]
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     environment:
       name: flagsmith-create
@@ -46,7 +50,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - name: Run read-only Flagsmith preflight
         env:
           FLAGSMITH_API_KEY: ${{ secrets.FLAGSMITH_API_KEY }}

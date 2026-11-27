@@ -17,6 +17,7 @@ concurrency:
 jobs:
   review:
     name: AI code review and experiment design
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages

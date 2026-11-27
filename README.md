@@ -35,17 +35,20 @@ Create a **public** repository named `flagpilot-flagsmith-agent`. The competitio
 
 In **Settings → Environments**, create `flagsmith-create` and `flagsmith-start`. Add an authorized required reviewer for both and restrict deployments to `main`. For a solo owner who must approve their own deployments, disable **Prevent self-review** as an explicit solo-operator exception; when an independent reviewer is available, enable it and have that person approve.
 
-In the `flagsmith-create` environment, add the secret `FLAGSMITH_API_KEY`. Add the same secret to `flagsmith-start`. Do not store this privileged key as an unrestricted repository secret.
+In the `flagsmith-create` environment, add the secret `FLAGSMITH_API_KEY`. Add the same secret to `flagsmith-start`. Do not store this privileged key as an unrestricted repository secret. Restrict both environments to deployments from `main` only; the YAML branch guards are defence in depth, not a substitute for GitHub Environment deployment-branch policies.
 
 ### 2a. Protect the `main` branch
 
 In **Settings → Branches → Add branch protection rule** (or create an equivalent repository ruleset), target `main` and require pull requests before merging. Require the repository's **CI** check to pass before merging, and disallow force pushes and branch deletion. Re-check the rule after saving: the branch must show as protected. This repository-level rule is separate from the workflow's `refs/heads/main` guard and the two Environment approvals.
 
-In **Settings → Secrets and variables → Actions → New repository secret**, add only:
+In **Settings → Environments**, create or open the `github-pages` environment and restrict deployments to `main` only. Add these environment secrets there (not as unrestricted repository secrets):
 
-| Secret | Purpose |
+| Environment secret | Purpose |
 |---|---|
-| `GEMINI_API_KEY` | Gemini Developer API key used only by the planning job. |
+| `GEMINI_API_KEY` | Gemini Developer API key used by planning and PR analysis. |
+| `PUBLIC_GITHUB_TOKEN` | Optional fine-grained read-only token for external public PR analysis. |
+
+The planning and PR-review jobs use this environment, and manual workflow jobs also reject non-main refs. Keep the `github-pages` environment's deployment branch policy set to `main` so a workflow dispatched from an untrusted branch cannot access these secrets. After confirming both environment secrets are available to successful main-branch runs, remove any duplicate `GEMINI_API_KEY` or `PUBLIC_GITHUB_TOKEN` repository secrets so there is only one controlled source for each credential.
 
 Create a Gemini key at [Google AI Studio](https://aistudio.google.com/apikey). The primary model defaults to `gemini-3.8-flash` and falls back to `gemini-3.5-flash-lite` if the primary returns a sustained HTTP 503. Both can be changed with repository variables `GEMINI_MODEL` and `GEMINI_FALLBACK_MODEL`.
 
