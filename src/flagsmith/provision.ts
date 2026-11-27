@@ -60,8 +60,7 @@ export async function provisionExperiment(api:FlagsmithApi,p:ExperimentProposal)
  if(String(variant.value)!==p.treatment.value)throw new Error("Treatment variation read-back value does not match the approved proposal.");
 
  const metrics=await api.experimentMetrics();let metric=findName(metrics,p.metric.name),metricReused=Boolean(metric);
- if(metric){const d=metric.definition;const event=isRecord(d)?d.event:undefined;if(event!==p.metric.eventName||metric.aggregation!=="occurrence"||metric.direction!=="up")throw new Error("Same metric name exists with mismatched configuration.");}
- else metric=await api.createMetric({name:p.metric.name,aggregation:"occurrence",direction:"up",definition:{version:1,event:p.metric.eventName}}) as Record<string,unknown>;
+ if(!metric)metric=await api.createMetric({name:p.metric.name,aggregation:"occurrence",direction:"up",definition:{version:1,event:p.metric.eventName}}) as Record<string,unknown>;
  const metricId=idOf(metric,"metric");const metricRead=await api.getMetric(metricId);verifyMetricConfiguration(metricRead,{id:metricId,name:p.metric.name,eventName:p.metric.eventName});
  const experiments=await api.experiments();let experiment=findName(experiments,p.experimentName),experimentReused=Boolean(experiment);
  if(experiment){const existingFeatureId=isRecord(experiment.feature)?experiment.feature.id:experiment.feature;if(!sameId(existingFeatureId,featureId))throw new Error("Experiment name exists but references a different feature.");}
