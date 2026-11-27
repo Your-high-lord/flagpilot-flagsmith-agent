@@ -22,3 +22,34 @@
 .confirmation-requirement{display:block}
 .confirmation-requirement>b{display:inline-block;min-width:15px;color:#6044df}
 .confirmation-copy>small{display:block;font-size:10px;line-height:1.5;color:#7b8396}
+
+
+/* Integration cards use a two-row grid so status pills can never collide with copy. */
+.status-card{
+  display:grid;
+  grid-template-columns:34px minmax(0,1fr);
+  grid-template-areas:"icon details" "status status";
+  align-items:center;
+  column-gap:10px;
+  row-gap:8px;
+}
+.status-card>.status-icon{grid-area:icon}
+.status-card>div:nth-child(2){grid-area:details;min-width:0;flex:initial}
+.status-card>.pill{
+  grid-area:status;
+  justify-self:start;
+  display:inline-block;
+  width:fit-content;
+  max-width:100%;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  text-align:left;
+  line-height:1.3;
+}
+.status-card b{overflow-wrap:anywhere}
+.status-card small{line-height:1.4;overflow-wrap:anywhere}
+@media(max-width:720px){
+  .status-card{grid-template-columns:28px minmax(0,1fr);column-gap:8px;row-gap:7px}
+  .status-card>.status-icon{width:28px;height:28px;font-size:17px}
+  .status-card>.pill{font-size:9px;padding:5px 8px}
+}
