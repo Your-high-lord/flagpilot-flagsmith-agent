@@ -246,6 +246,13 @@ export function scanInstrumentationEvidence(input:{
         (declaration.getSourceFile().fileName===shimPath||
           /(?:^|[\\/])lib\..*\.d\.ts$/i.test(declaration.getSourceFile().fileName)));
     };
+    let globalThisShadowed=false;
+    const findGlobalThisBinding=(node:ts.Node):void=>{
+      if((ts.isVariableDeclaration(node)||ts.isFunctionDeclaration(node)||ts.isClassDeclaration(node)||ts.isParameter(node))&&
+        node.name&&ts.isIdentifier(node.name)&&node.name.text==="globalThis")globalThisShadowed=true;
+      ts.forEachChild(node,findGlobalThisBinding);
+    };
+    findGlobalThisBinding(sourceFile);
     const isGlobalObjectAlias=(node:ts.Expression,seen=new Set<ts.Symbol>()):boolean=>{
       node=unwrap(node);
       if(ts.isPropertyAccessExpression(node)&&node.name.text==="window"&&ts.isIdentifier(node.expression)&&
@@ -256,7 +263,7 @@ export function scanInstrumentationEvidence(input:{
         // Some TypeScript lib versions do not expose globalThis through the
         // same declaration path as window. Accept the intrinsic global when
         // it is not locally shadowed; local bindings still fail closed.
-        if(isStandardGlobal(node)||(node.text==="globalThis"&&
+        if(isStandardGlobal(node)||(node.text==="globalThis"&&!globalThisShadowed&&
           (!symbol||(symbol.declarations??[]).every(declaration=>declaration.getSourceFile().isDeclarationFile))))return true;
       }
       const symbol=symbolOf(node);
