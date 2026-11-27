@@ -3,7 +3,7 @@ import {FlagsmithApi,isRecord} from "../flagsmith/api.js";
 import {startExperiment} from "../flagsmith/start.js";
 import {verifyExistingExperimentConfiguration} from "../domain/experiment-reuse.js";
 import {validateProvisioningArtifact} from "../domain/provisioning-artifact.js";
-import {verifyMetricConfiguration} from "../domain/metric-verification.js";
+import {fetchAndVerifyLiveMetric} from "../domain/metric-verification.js";
 
 function required(name:string):string {
   const value=process.env[name]?.trim();
@@ -44,8 +44,7 @@ const result=await startExperiment(api,id,{
     // Make the metric read the final live configuration read before the start write.
     // The attached metric ID in the experiment is not sufficient: the metric's
     // event definition can be edited without changing that ID or display name.
-    const metric=await api.getMetric(artifact.result.metric.id);
-    verifyMetricConfiguration(metric,{
+    await fetchAndVerifyLiveMetric(api,{
       id:artifact.result.metric.id,
       name:artifact.proposal.metric.name,
       eventName:artifact.proposal.metric.eventName
