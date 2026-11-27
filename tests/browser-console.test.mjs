@@ -270,6 +270,8 @@ test("legacy saved event names cannot override the fixed demo metric or the even
   await page.locator("#connect-form button[type=submit]").click();
   await page.getByText("ENROLLED",{exact:true}).waitFor();
   assert.equal(await page.locator("#connection-badge").innerText(),"ENROLLED");
+  const savedConfig=await page.evaluate(()=>JSON.parse(localStorage.getItem("flagpilot-demo-config-v1")));
+  assert.equal(savedConfig.eventName,"demo_signup_completed","connecting must overwrite the legacy event name with the fixed metric");
   await page.locator("#conversion-button").click();
   await page.getByText("Synthetic conversion 'demo_signup_completed' passed to Flagsmith").waitFor();
   const tracked=await page.evaluate(()=>window.__flagpilotSdkCalls);
