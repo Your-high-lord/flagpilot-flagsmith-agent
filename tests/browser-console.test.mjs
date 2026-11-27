@@ -158,3 +158,37 @@ test("dashboard hides an older published report after a newer PR review is reque
   assert.equal(await page.locator("#promotion-confirm").count(),1);
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
+
+
+test("integration status cards never overlap copy or overflow at desktop, tablet and mobile widths",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  for(const width of [390,768,1024,1280,1600,1920]){
+   await page.setViewportSize({width,height:1000});
+   await page.goto(url);
+   await page.locator(".status-card").first().waitFor();
+   const metrics=await page.locator(".status-card").evaluateAll(cards=>cards.map(card=>{
+    const content=card.children[1],badge=card.querySelector(".pill");
+    const cardRect=card.getBoundingClientRect();
+    const contentRect=content.getBoundingClientRect();
+    const badgeRect=badge.getBoundingClientRect();
+    return {
+     cardWidth:card.clientWidth,scrollWidth:card.scrollWidth,
+     badgeLeft:badgeRect.left,cardLeft:cardRect.left,
+     badgeRight:badgeRect.right,cardRight:cardRect.right,
+     badgeTop:badgeRect.top,contentBottom:contentRect.bottom,
+     badgeScrollWidth:badge.scrollWidth,badgeClientWidth:badge.clientWidth
+    };
+   }));
+   assert.equal(metrics.length,4,"all four integration cards should render");
+   for(const metric of metrics){
+    assert.ok(metric.badgeTop>=metric.contentBottom-1,"status badge overlaps card copy at viewport "+width+"px");
+    assert.ok(metric.badgeLeft>=metric.cardLeft-0.5,"status badge escapes left card edge at viewport "+width+"px");
+    assert.ok(metric.badgeRight<=metric.cardRight+0.5,"status badge escapes right card edge at viewport "+width+"px");
+    assert.ok(metric.scrollWidth<=metric.cardWidth,"integration card has horizontal overflow at viewport "+width+"px");
+    assert.ok(metric.badgeScrollWidth<=metric.badgeClientWidth,"status label text is clipped at viewport "+width+"px");
+   }
+  }
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
