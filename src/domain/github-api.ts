@@ -40,11 +40,10 @@ function isRateLimit(response:Response,body:string):boolean{
 }
 function safeResource(url:URL):string{return url.pathname+url.search;}
 export function createGitHubApiClient(
-  token:string,
+  token?:string,
   fetchImpl:FetchLike=fetch,
   sleepImpl:SleepLike=sleep
 ){
-  if(!token.trim())throw new Error("GITHUB_TOKEN is required for GitHub API access. Configure the workflow's read-only GITHUB_TOKEN permission.");
   return async function githubGet<T>(input:string,options:GitHubRequestOptions={}):Promise<T>{
     let url:URL;
     try{url=new URL(input);}catch{throw new Error("GitHub API URL is invalid.");}
@@ -58,7 +57,7 @@ export function createGitHubApiClient(
           method:options.method??"GET",
           headers:{
             Accept:"application/vnd.github+json",
-            Authorization:"Bearer "+token,
+            ...(token?.trim()?{Authorization:"Bearer "+token.trim()}:{}),
             "User-Agent":"FlagPilot-PR-Experiment-Agent",
             "X-GitHub-Api-Version":"2022-11-28",
             ...(options.headers??{})
@@ -85,13 +84,13 @@ export function createGitHubApiClient(
       }
       if(rateLimited){
         throw new GitHubApiError(
-          `GitHub API rate limit blocked ${resource} after ${attempt} attempts. ${body||"Wait for the rate-limit window to reset and retry."}`,
+          `GitHub API rate limit blocked ${resource} after ${attempt} attempts. ${token?"Wait for the rate-limit window to reset and retry.":"Unauthenticated GitHub API limits are low; configure PUBLIC_GITHUB_TOKEN as a fine-grained, read-only token for the target public repository."} ${body}`,
           response.status,resource,true
         );
       }
       if(response.status===401||response.status===403){
         throw new GitHubApiError(
-          `GitHub API denied ${resource} with HTTP ${response.status}. Check that GITHUB_TOKEN is present and the workflow grants the required read permission (pull-requests: read for PR metadata/files). GitHub response: ${body}`,
+          `GitHub API denied ${resource} with HTTP ${response.status}. Check token access and the required read permission (pull-requests: read for PR metadata/files). For a public PR in another owner/repository, GITHUB_TOKEN is not sufficient; configure PUBLIC_GITHUB_TOKEN with read-only access to that target repository. GitHub response: ${body}`,
           response.status,resource,false
         );
       }
