@@ -35,3 +35,13 @@ export function verifyMetricConfiguration(value:unknown,expected:ExpectedMetricC
     throw new Error("Live metric direction must remain up.");
   }
 }
+
+export interface MetricReader {
+  getMetric(id:number):Promise<unknown>;
+}
+
+/** Fetch by the artifact-bound ID and verify the current live definition. */
+export async function fetchAndVerifyLiveMetric(api:MetricReader,expected:ExpectedMetricConfiguration):Promise<void> {
+  const liveMetric=await api.getMetric(expected.id);
+  verifyMetricConfiguration(liveMetric,expected);
+}
