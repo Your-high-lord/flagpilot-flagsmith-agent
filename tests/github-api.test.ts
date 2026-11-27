@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createGitHubApiClient,fetchPublicSourceFile,GitHubApiError,type FetchLike} from "../src/domain/github-api.js";
+import {createGitHubApiClient,fetchPublicSourceFile,selectGitHubApiToken,GitHubApiError,type FetchLike} from "../src/domain/github-api.js";
 
 const endpoint="https://api.github.com/repos/Flagsmith/flagsmith/pulls/9115";
 function json(body:unknown,status=200,headers:Record<string,string>={}):Response{
@@ -102,4 +102,15 @@ test("unauthenticated rate-limit errors explain the required optional secret",as
     assert.match(error.message,/PUBLIC_GITHUB_TOKEN/);
     return true;
   });
+});
+
+test("token selection uses workflow token only for the same repository",()=>{
+  assert.equal(selectGitHubApiToken({workflowRepository:"owner/app",targetRepository:"OWNER/APP",workflowToken:"workflow-token",publicToken:"public-token"}),"workflow-token");
+});
+test("token selection never leaks workflow token to an external repository",()=>{
+  assert.equal(selectGitHubApiToken({workflowRepository:"owner/app",targetRepository:"Flagsmith/flagsmith",workflowToken:"workflow-token"}),undefined);
+  assert.equal(selectGitHubApiToken({workflowRepository:"owner/app",targetRepository:"Flagsmith/flagsmith",workflowToken:"workflow-token",publicToken:"public-read-token"}),"public-read-token");
+});
+test("token selection fails closed when same-repository PR token is missing",()=>{
+  assert.throws(()=>selectGitHubApiToken({workflowRepository:"owner/app",targetRepository:"owner/app"}),/pull-requests: read/);
 });
