@@ -23,13 +23,13 @@ function fakeApi(statuses:string[]) {
 const draftOnly={allowedStatuses:["created","draft"] as const};
 
 test("starts a newly created experiment after a fresh status read",async()=>{
- const f=fakeApi(["created","running"]);
+ const f=fakeApi(["created","created","running"]);
  const result=await startExperiment(f.api,596,draftOnly);
- assert.equal(f.reads,2);assert.equal(f.writes,1);
+ assert.equal(f.reads,3);assert.equal(f.writes,1);
  assert.equal(result.status,"running");
 });
 test("starts a draft after a fresh status read",async()=>{
- const f=fakeApi(["draft","active"]);
+ const f=fakeApi(["draft","draft","active"]);
  const result=await startExperiment(f.api,596,draftOnly);
  assert.equal(f.reads,2);assert.equal(f.writes,1);
  assert.equal(result.status,"active");
@@ -45,9 +45,15 @@ test("rejects paused status on the final pre-start read without writing",async()
  await assert.rejects(()=>startExperiment(f.api,596,draftOnly),/Allowed pre-start states: created, draft/);
  assert.equal(f.reads,1);assert.equal(f.writes,0);
 });
-test("rejects an experiment that became paused after earlier validation",async()=>{
- const f=fakeApi(["paused"]);
- await assert.rejects(()=>startExperiment(f.api,596,draftOnly),/paused/);
+test("rejects an experiment that changes from created to paused during live pre-start validation",async()=>{
+ const f=fakeApi(["created","paused"]);
+ let validated=false;
+ await assert.rejects(()=>startExperiment(f.api,596,{
+  ...draftOnly,
+  validateBeforeStart:()=>{validated=true;}
+ }),/changed to 'paused' during pre-start validation/);
+ assert.equal(validated,true);
+ assert.equal(f.reads,2);
  assert.equal(f.writes,0);
 });
 test("rejects running or active status instead of treating it as a valid draft start",async()=>{
@@ -75,10 +81,10 @@ test("rejects when the post-start status cannot be verified",async()=>{
  assert.equal(f.writes,1);
 });
 
-test("runs final configuration validation against the fresh experiment before writing",async()=>{
- const f=fakeApi(["created","running"]);let validatedStatus:string|undefined;
- await startExperiment(f.api,596,{...draftOnly,validateBeforeStart:experiment=>{validatedStatus=String(experiment.status);}});
- assert.equal(validatedStatus,"created");assert.equal(f.writes,1);
+test("runs final configuration validation against the last pre-start experiment read",async()=>{
+ const f=fakeApi(["created","draft","running"]);let validatedStatus:string|undefined;
+ await startExperiment(f.api,596,{...draftOnly,validateFinalExperiment:experiment=>{validatedStatus=String(experiment.status);}});
+ assert.equal(validatedStatus,"draft");assert.equal(f.reads,3);assert.equal(f.writes,1);
 });
 test("aborts without a Flagsmith write when final configuration validation detects drift",async()=>{
  const f=fakeApi(["created"]);
