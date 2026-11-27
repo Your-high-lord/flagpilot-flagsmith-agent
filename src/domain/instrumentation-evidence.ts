@@ -297,7 +297,7 @@ export function scanInstrumentationEvidence(input:{
         if(ts.isVariableDeclaration(declaration)&&declaration.initializer){
           const api=reflectionApi(declaration.initializer,new Set(seen));if(api)return api;
         }
-        if(ts.isBindingElement(declaration)&&declaration.dotDotToken&&ts.isIdentifier(declaration.name)&&symbolOf(declaration.name)===symbol){
+        if(ts.isBindingElement(declaration)&&declaration.dotDotDotToken&&ts.isIdentifier(declaration.name)&&symbolOf(declaration.name)===symbol){
           const bindingPattern=declaration.parent;
           const variable=bindingPattern.parent;
           if(ts.isObjectBindingPattern(bindingPattern)&&ts.isVariableDeclaration(variable)&&variable.initializer){
