@@ -278,10 +278,20 @@ export function scanInstrumentationEvidence(input:{
       seen.add(symbol);
       for(const declaration of symbol.declarations??[]){
         if(ts.isVariableDeclaration(declaration)&&declaration.initializer){
-          const api=reflectionApi(declaration.initializer,seen);if(api)return api;
+          const api=reflectionApi(declaration.initializer,new Set(seen));if(api)return api;
         }
       }
-      return undefined;
+      // Also trace aliases assigned from Object/Reflect after declaration.
+      let assignedApi:"Object"|"Reflect"|undefined;
+      const inspectAssignments=(node:ts.Node):void=>{
+        if(ts.isBinaryExpression(node)&&ASSIGNMENT_OPERATORS.has(node.operatorToken.kind)&&
+          ts.isIdentifier(node.left)&&symbolOf(node.left)===symbol){
+          const api=reflectionApi(node.right,new Set(seen));if(api)assignedApi=api;
+        }
+        ts.forEachChild(node,inspectAssignments);
+      };
+      inspectAssignments(sourceFile);
+      return assignedApi;
     };
     const sdkOfClient=(node:ts.Expression,seen=new Set<ts.Symbol>(),allowMutableAlias=false):InstrumentationSourceMatch["sdk"]|undefined=>{
       node=unwrap(node);
