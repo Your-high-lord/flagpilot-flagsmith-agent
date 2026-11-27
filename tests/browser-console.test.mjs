@@ -128,7 +128,8 @@ test("start request uses explicit provisioning run and experiment IDs instead of
   await page.locator("#start-experiment-id").fill("98765");
   await page.locator("#demo-verified").check();
   await page.locator("#start-form button").click();
-  await page.getByText(/Start request submitted/).waitFor();
+  await page.locator("#start-notice").getByText(/Start request submitted/).waitFor();
+  assert.match(await page.locator("#start-notice").textContent(),/45912345678.*98765/);
   assert.equal(dispatchBody?.inputs?.provision_run_id,"45912345678");
   assert.equal(dispatchBody?.inputs?.experiment_id,"98765");
   assert.equal(dispatchBody?.inputs?.demo_verified,"true");
