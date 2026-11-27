@@ -226,6 +226,12 @@ export function scanInstrumentationEvidence(input:{
       }
       return undefined;
     };
+    const staticallyKnownPropertyName=(node:ts.Expression):string|undefined=>{
+      node=unwrap(node);
+      if(ts.isPropertyAccessExpression(node))return node.name.text;
+      if(ts.isElementAccessExpression(node)&&node.argumentExpression)return literalValueOf(node.argumentExpression);
+      return undefined;
+    };
     const isNamespace=(node:ts.Expression):boolean=>{
       node=unwrap(node);
       if(!ts.isIdentifier(node))return false;
@@ -292,8 +298,7 @@ export function scanInstrumentationEvidence(input:{
       // deciding whether a computed property is the trusted global API name.
       // Unknown computed keys deliberately do not resolve to Object/Reflect.
       if(ts.isPropertyAccessExpression(node)||ts.isElementAccessExpression(node)){
-        const api=node.name?.text??(ts.isElementAccessExpression(node)&&node.argumentExpression
-          ?literalValueOf(node.argumentExpression):undefined);
+        const api=staticallyKnownPropertyName(node);
         if((api==="Object"||api==="Reflect")&&isGlobalObjectAlias(node.expression))return api;
       }
       if(!ts.isIdentifier(node))return undefined;
@@ -332,9 +337,11 @@ export function scanInstrumentationEvidence(input:{
         :["set","defineProperty","deleteProperty","setPrototypeOf"].includes(method);
       if(ts.isPropertyAccessExpression(node)||ts.isElementAccessExpression(node)){
         const api=reflectionApi(node.expression);
-        const method=node.name?.text??(ts.isElementAccessExpression(node)&&node.argumentExpression
-          ?literalValueOf(node.argumentExpression):undefined);
+        const method=staticallyKnownPropertyName(node);
         if(api){
+          // An unknown dynamic method on a trusted global API is treated as a
+          // possible mutation. Only a statically resolved known method can be
+          // classified more narrowly.
           if(method===undefined)return{api,method:"*"};
           if(allowed(api,method))return{api,method};
         }
