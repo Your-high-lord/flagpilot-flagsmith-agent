@@ -49,6 +49,11 @@ test("dashboard submits a fully eligible authenticated promotion with explicit c
    await route.fulfill({status:404,body:"not found"});
   });
   await page.goto(url);await page.getByText("Example checkout change").waitFor();
+  assert.equal(await page.locator("#promote-form input[type=checkbox]").count(),1,"promotion UI must contain exactly one checkbox");
+  assert.equal(await page.locator("#promotion-confirm").count(),1);
+  assert.equal(await page.locator("#promote-form #delivery-verified, #promote-form #promote-confirm").count(),0,"legacy separate confirmation checkboxes must be absent");
+  assert.match(await page.locator("#promote-form").innerText(),/independently tested.*exact conversion event reached Flagsmith/s);
+  assert.match(await page.locator("#promote-form").innerText(),/reviewed the complete PR report and authorize/s);
   await page.getByRole("button",{name:"Connect GitHub"}).click();
   await page.locator("#token").fill("github_pat_test_only");
   await page.locator("#save-token").click();
