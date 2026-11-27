@@ -23,7 +23,7 @@ test("GitHub API client refuses to send credentials to another host",async()=>{
   await assert.rejects(()=>get("https://raw.githubusercontent.com/Flagsmith/flagsmith/main/README.md"),/only be sent to/);
   assert.equal(called,false);
 });
-test("GitHub API client requires a token",()=>assert.throws(()=>createGitHubApiClient(" "),/GITHUB_TOKEN is required/));
+test("GitHub API client supports unauthenticated public reads without leaking an empty bearer token",async()=>{\n  let seen:RequestInit|undefined;\n  const fake:FetchLike=async(_url,init)=>{seen=init;return json({ok:true});};\n  const get=createGitHubApiClient(undefined,fake,async()=>{});\n  assert.deepEqual(await get<{ok:boolean}>(endpoint),{ok:true});\n  assert.equal(new Headers(seen?.headers).has("Authorization"),false);\n});
 test("GitHub API client retries a primary rate-limit 403 and succeeds",async()=>{
   let calls=0,waits:number[]=[];
   const fake:FetchLike=async()=>++calls===1
