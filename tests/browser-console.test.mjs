@@ -213,7 +213,8 @@ test("controlled store demo sends the exact fixed synthetic conversion event onl
   assert.equal(await page.locator("#event-name").isEditable(),false);
   await page.locator("#environment-key").fill("public-development-sdk-key");
   await page.locator("#connect-form button[type=submit]").click();
-  await page.getByText("ENROLLED").waitFor();
+  await page.locator("#connection-badge").waitFor();
+  assert.equal(await page.locator("#connection-badge").innerText(),"ENROLLED");
   await page.locator("#conversion-button").click();
   await page.getByText("Synthetic conversion 'demo_signup_completed' passed to Flagsmith").waitFor();
   const calls=await page.evaluate(()=>window.__flagpilotSdkCalls);
@@ -235,7 +236,8 @@ test("controlled store demo never sends a conversion for an identity outside the
   await page.goto(new URL("store.html",url).href);
   await page.locator("#environment-key").fill("public-development-sdk-key");
   await page.locator("#connect-form button[type=submit]").click();
-  await page.getByText("CONNECTED · NOT ENROLLED").waitFor();
+  await page.locator("#connection-badge").waitFor();
+  assert.equal(await page.locator("#connection-badge").innerText(),"CONNECTED · NOT ENROLLED");
   assert.equal(await page.locator("#conversion-button").isDisabled(),true);
   assert.deepEqual(await page.evaluate(()=>window.__flagpilotSdkCalls),[]);
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
