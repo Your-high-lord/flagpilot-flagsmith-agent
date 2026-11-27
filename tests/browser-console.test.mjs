@@ -164,7 +164,7 @@ test("integration status cards never overlap copy or overflow at desktop, tablet
  const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
  try{
   const page=await browser.newPage();
-  for(const width of [390,768,1280,1600]){
+  for(const width of [390,768,1024,1280,1600,1920]){
    await page.setViewportSize({width,height:1000});
    await page.goto(url);
    await page.locator(".status-card").first().waitFor();
