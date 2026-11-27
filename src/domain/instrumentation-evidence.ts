@@ -244,7 +244,7 @@ export function scanInstrumentationEvidence(input:{
       return declarations.length>0&&declarations.every(declaration=>
         declaration.getSourceFile().isDeclarationFile&&
         (declaration.getSourceFile().fileName===shimPath||
-          /(?:^|[\\/])lib\.(?:dom|es20\d\d|esnext).*\.d\.ts$/i.test(declaration.getSourceFile().fileName)));
+          /(?:^|[\\/])lib\.(?:dom|es\d+|esnext).*\.d\.ts$/i.test(declaration.getSourceFile().fileName)));
     };
     const isGlobalObjectAlias=(node:ts.Expression,seen=new Set<ts.Symbol>()):boolean=>{
       node=unwrap(node);
