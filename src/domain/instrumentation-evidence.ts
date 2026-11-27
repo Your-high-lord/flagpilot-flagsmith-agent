@@ -88,7 +88,7 @@ function hasGlobalSdkReplacement(
       const resolved=reflectionMethod(node.expression),args=node.arguments,target=args[0];
       if(resolved&&target&&isGlobalObject(target)){
         const {api,method}=resolved;
-        if(method==="setPrototypeOf")replaced=true;
+        if(method==="*"||method==="setPrototypeOf")replaced=true;
         else if(api==="Object"&&method==="assign"&&args.slice(1).some(source=>objectMayContainProperty(source,"flagsmith")))replaced=true;
         else if((method==="defineProperty"||method==="set"||method==="deleteProperty")&&propertyMayBe(args[1],"flagsmith"))replaced=true;
         else if(method==="defineProperties"&&objectMayContainProperty(args[1],"flagsmith"))replaced=true;
@@ -116,7 +116,7 @@ function hasTrackEventMutation(
       const resolved=reflectionMethod(node.expression),args=node.arguments,target=args[0];
       if(resolved&&target&&isSdkClient(target)){
         const {api,method}=resolved;
-        if(method==="setPrototypeOf")mutated=true;
+        if(method==="*"||method==="setPrototypeOf")mutated=true;
         else if(api==="Object"&&method==="assign"&&args.slice(1).some(source=>objectMayContainProperty(source,"trackEvent")))mutated=true;
         else if((method==="defineProperty"||method==="set"||method==="deleteProperty")&&propertyMayBe(args[1],"trackEvent"))mutated=true;
         else if(method==="defineProperties"&&objectMayContainProperty(args[1],"trackEvent"))mutated=true;
@@ -297,6 +297,13 @@ export function scanInstrumentationEvidence(input:{
         if(ts.isVariableDeclaration(declaration)&&declaration.initializer){
           const api=reflectionApi(declaration.initializer,new Set(seen));if(api)return api;
         }
+        if(ts.isBindingElement(declaration)&&declaration.dotDotDotToken&&ts.isIdentifier(declaration.name)&&symbolOf(declaration.name)===symbol){
+          const bindingPattern=declaration.parent;
+          const variable=bindingPattern.parent;
+          if(ts.isObjectBindingPattern(bindingPattern)&&ts.isVariableDeclaration(variable)&&variable.initializer){
+            const api=reflectionApi(variable.initializer,new Set(seen));if(api)return api;
+          }
+        }
       }
       // Also trace aliases assigned from Object/Reflect after declaration.
       let assignedApi:"Object"|"Reflect"|undefined;
@@ -324,26 +331,28 @@ export function scanInstrumentationEvidence(input:{
       if(!symbol||seen.has(symbol))return undefined;
       seen.add(symbol);
       for(const declaration of symbol.declarations??[]){
-        if(!ts.isVariableDeclaration(declaration))continue;
-        if(declaration.initializer){
+        if(ts.isVariableDeclaration(declaration)&&declaration.initializer){
           const direct=reflectionMethod(declaration.initializer,new Set(seen));
           if(direct)return direct;
-          if(ts.isObjectBindingPattern(declaration.name)){
-            const api=reflectionApi(declaration.initializer);
-            if(api){
-              for(const element of declaration.name.elements){
-                if(!ts.isIdentifier(element.name)||symbolOf(element.name)!==symbol)continue;
-                const property=element.propertyName;
-                const method=property
-                  ?ts.isIdentifier(property)||ts.isStringLiteral(property)||ts.isNumericLiteral(property)?property.text:
-                    ts.isComputedPropertyName(property)&&
-                      (ts.isStringLiteral(property.expression)||ts.isNoSubstitutionTemplateLiteral(property.expression))
-                        ?property.expression.text:undefined
-                  :element.name.text;
-                if(method&&allowed(api,method))return{api,method};
-              }
-            }
+        }
+        if(ts.isBindingElement(declaration)&&ts.isIdentifier(declaration.name)&&symbolOf(declaration.name)===symbol){
+          const bindingPattern=declaration.parent;
+          if(!ts.isObjectBindingPattern(bindingPattern))continue;
+          const variable=bindingPattern.parent;
+          if(!ts.isVariableDeclaration(variable)||!variable.initializer)continue;
+          const api=reflectionApi(variable.initializer);
+          if(!api)continue;
+          const property=declaration.propertyName??declaration.name;
+          let method:string|undefined;
+          if(ts.isIdentifier(property)||ts.isStringLiteral(property)||ts.isNumericLiteral(property))method=property.text;
+          else if(ts.isComputedPropertyName(property)){
+            const expression=unwrap(property.expression);
+            method=ts.isStringLiteral(expression)||ts.isNoSubstitutionTemplateLiteral(expression)
+              ?expression.text:"*";
           }
+          // Unknown computed destructuring keys fail closed when the resulting
+          // function is later invoked against the global SDK or SDK client.
+          if(method==="*"||method&&allowed(api,method))return{api,method:method??"*"};
         }
       }
       let assigned:ReflectionMutationMethod|undefined;
