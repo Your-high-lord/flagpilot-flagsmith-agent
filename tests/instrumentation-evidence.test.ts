@@ -1,4 +1,5 @@
 import test from "node:test";
+import {readFile} from "node:fs/promises";
 import assert from "node:assert/strict";
 import {scanInstrumentationEvidence} from "../src/domain/instrumentation-evidence.js";
 const sha="a".repeat(40);
@@ -127,4 +128,19 @@ test("rejects Reflect.set replacement of trackEvent",()=>{
 test("rejects Reflect.deleteProperty removal of trackEvent",()=>{
  const r=scan('import flagsmith from "@flagsmith/flagsmith"; Reflect.deleteProperty(flagsmith,"trackEvent"); flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+
+test("recognizes the exact conversion event in the real controlled store demo source",async()=>{
+ const source=await readFile("demo/app.js","utf8");
+ const result=scanInstrumentationEvidence({eventName:"demo_signup_completed",sourceSha:sha,files:{"demo/app.js":source}});
+ assert.equal(result.status,"flagsmith_sdk_call_found");
+ assert.equal(result.trackingCallFound,true);
+ assert.deepEqual(result.matches.map(match=>match.file),["demo/app.js"]);
+});
+
+test("does not accept a different event name for the controlled store demo",async()=>{
+ const source=await readFile("demo/app.js","utf8");
+ const result=scanInstrumentationEvidence({eventName:"demo_signup_clicked",sourceSha:sha,files:{"demo/app.js":source}});
+ assert.equal(result.status,"not_found");
+ assert.equal(result.trackingCallFound,false);
 });

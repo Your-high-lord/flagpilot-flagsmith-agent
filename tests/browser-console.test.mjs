@@ -192,3 +192,89 @@ test("integration status cards never overlap copy or overflow at desktop, tablet
   }
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
+
+test("controlled store demo sends the exact fixed synthetic conversion event only after enrollment",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{
+   window.__flagpilotSdkCalls=[];
+   window.flagsmith={
+    async init(options){window.__flagpilotSdkCalls.push(["init",options.enableEvents]);},
+    async identify(identity){window.__flagpilotSdkCalls.push(["identify",identity]);},
+    getExperimentFlag(name){window.__flagpilotSdkCalls.push(["getExperimentFlag",name]);return{enabled:true,value:"Try it free",experiment:{inExperiment:true}};},
+    trackEvent(name,options){window.__flagpilotSdkCalls.push(["trackEvent",name,options]);},
+    async flushEvents(){window.__flagpilotSdkCalls.push(["flushEvents"]);}
+   };
+  });
+  await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  await page.goto(new URL("store.html",url).href);
+  assert.equal(await page.locator("#event-name").inputValue(),"demo_signup_completed");
+  assert.equal(await page.locator("#event-name").isEditable(),false);
+  await page.locator("#environment-key").fill("public-development-sdk-key");
+  await page.locator("#connect-form button[type=submit]").click();
+  await page.locator("#connection-badge").waitFor();
+  assert.equal(await page.locator("#connection-badge").innerText(),"ENROLLED");
+  await page.locator("#conversion-button").click();
+  await page.getByText("Synthetic conversion 'demo_signup_completed' passed to Flagsmith").waitFor();
+  const calls=await page.evaluate(()=>window.__flagpilotSdkCalls);
+  assert.deepEqual(calls.find(call=>call[0]==="trackEvent"),["trackEvent","demo_signup_completed",{metadata:{source:"flagpilot_demo",synthetic:true}}]);
+  assert.ok(calls.some(call=>call[0]==="flushEvents"));
+  assert.equal(calls.filter(call=>call[0]==="trackEvent").length,1);
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+
+test("controlled store demo never sends a conversion for an identity outside the experiment",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{
+   window.__flagpilotSdkCalls=[];
+   window.flagsmith={async init(){},async identify(){},getExperimentFlag(){return{enabled:true,value:"Start free trial",experiment:{inExperiment:false}};},trackEvent(name){window.__flagpilotSdkCalls.push(name);},async flushEvents(){}};
+  });
+  await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  await page.goto(new URL("store.html",url).href);
+  await page.locator("#environment-key").fill("public-development-sdk-key");
+  await page.locator("#connect-form button[type=submit]").click();
+  await page.locator("#connection-badge").waitFor();
+  assert.equal(await page.locator("#connection-badge").innerText(),"CONNECTED · NOT ENROLLED");
+  assert.equal(await page.locator("#conversion-button").isDisabled(),true);
+  assert.deepEqual(await page.evaluate(()=>window.__flagpilotSdkCalls),[]);
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+test("legacy saved event names cannot override the fixed demo metric or the event sent to Flagsmith",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{
+   localStorage.setItem("flagpilot-demo-config-v1",JSON.stringify({
+    environmentKey:"public-development-sdk-key",
+    featureName:"fp_signup_button_label_8d4d6f",
+    controlLabel:"Start free trial",
+    eventName:"checkout_completed"
+   }));
+   window.__flagpilotSdkCalls=[];
+   window.flagsmith={
+    async init(){},
+    async identify(){},
+    getExperimentFlag(){return{enabled:true,value:"Try it free",experiment:{inExperiment:true}};},
+    trackEvent(name,options){window.__flagpilotSdkCalls.push([name,options]);},
+    async flushEvents(){}
+   };
+  });
+  await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  await page.goto(new URL("store.html",url).href);
+  assert.equal(await page.locator("#event-name").inputValue(),"demo_signup_completed","legacy saved event name must not appear as the active metric");
+  assert.equal(await page.locator("#event-name").isEditable(),false);
+  assert.equal(await page.locator("#feature-name").inputValue(),"fp_signup_button_label_8d4d6f","other saved settings should still restore");
+  await page.locator("#connect-form button[type=submit]").click();
+  await page.getByText("ENROLLED",{exact:true}).waitFor();
+  assert.equal(await page.locator("#connection-badge").innerText(),"ENROLLED");
+  const savedConfig=await page.evaluate(()=>JSON.parse(localStorage.getItem("flagpilot-demo-config-v1")));
+  assert.equal(savedConfig.eventName,"demo_signup_completed","connecting must overwrite the legacy event name with the fixed metric");
+  await page.locator("#conversion-button").click();
+  await page.getByText("Synthetic conversion 'demo_signup_completed' passed to Flagsmith").waitFor();
+  const tracked=await page.evaluate(()=>window.__flagpilotSdkCalls);
+  assert.deepEqual(tracked,[["demo_signup_completed",{metadata:{source:"flagpilot_demo",synthetic:true}}]],"the exact event shown in the UI must be the event actually tracked");
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
