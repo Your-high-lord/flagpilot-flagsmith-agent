@@ -37,6 +37,10 @@ In **Settings → Environments**, create `flagsmith-create` and `flagsmith-start
 
 In the `flagsmith-create` environment, add the secret `FLAGSMITH_API_KEY`. Add the same secret to `flagsmith-start`. Do not store this privileged key as an unrestricted repository secret.
 
+### 2a. Protect the `main` branch
+
+In **Settings → Branches → Add branch protection rule** (or create an equivalent repository ruleset), target `main` and require pull requests before merging. Require the repository's **CI** check to pass before merging, and disallow force pushes and branch deletion. Re-check the rule after saving: the branch must show as protected. This repository-level rule is separate from the workflow's `refs/heads/main` guard and the two Environment approvals.
+
 In **Settings → Secrets and variables → Actions → New repository secret**, add only:
 
 | Secret | Purpose |
