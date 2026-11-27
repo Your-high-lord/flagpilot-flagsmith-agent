@@ -27,8 +27,13 @@ const api=new FlagsmithApi({apiKey,environmentKey,...(process.env.FLAGSMITH_API_
 
 // Verify the project-level feature remains disabled outside the selected experiment rollout.
 const feature=await api.getProjectFeature(projectId,artifact.result.feature.id);
-if(!isRecord(feature)||feature.type!=="MULTIVARIATE"||feature.initial_value!=="control"||feature.default_enabled!==false) {
-  throw new Error("The provisioned feature no longer matches its safe project-level defaults. Refusing to start.");
+if(!isRecord(feature)||Number(feature.id)!==artifact.result.feature.id||feature.name!==artifact.result.feature.name||feature.type!=="MULTIVARIATE"||feature.initial_value!=="control"||feature.default_enabled!==false) {
+  throw new Error("The provisioned feature no longer matches its identity or safe project-level defaults. Refusing to start.");
+}
+const variations=Array.isArray(feature.multivariate_options)?feature.multivariate_options.filter(isRecord):[];
+const treatment=variations.find(option=>Number(option.id)===artifact.result.treatment.id);
+if(!treatment||treatment.key!==artifact.result.treatment.key||treatment.string_value!==artifact.result.treatment.value||treatment.default_percentage_allocation!==0) {
+  throw new Error("The treatment variation identity, value or project-level default allocation changed after provisioning. Refusing to start.");
 }
 
 // Re-read the live experiment after the flagsmith-start approval and compare every
