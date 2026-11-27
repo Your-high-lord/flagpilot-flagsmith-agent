@@ -118,6 +118,14 @@ test("rejects replacement of window.flagsmith through a global alias",()=>{
  const r=scan('declare const fake:any; const globalAlias=window; globalAlias.flagsmith=fake; window.flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
 });
+test("rejects a global alias assigned after its declaration",()=>{
+ const r=scan('declare const fake:any; let globalAlias:any={}; globalAlias=window; globalAlias.flagsmith=fake; window.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
+test("rejects Reflect mutation through an alias assigned after declaration",()=>{
+ const r=scan('declare const fake:any; let root:any={}; root=globalThis; const alias=root; Reflect.set(alias,"flagsmith",fake); window.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
 test("rejects replacement through a reassigned global alias",()=>{
  const r=scan('declare const fake:any, other:any; let globalAlias=window; globalAlias=other; globalAlias.flagsmith=fake; window.flagsmith.trackEvent("CheckoutStarted");');
  assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
