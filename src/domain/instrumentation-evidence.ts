@@ -200,6 +200,19 @@ export function scanInstrumentationEvidence(input:{
     }
 
     const symbolOf=(node:ts.Identifier)=>checker.getSymbolAtLocation(node);
+    const literalValueOf=(node:ts.Expression,seen=new Set<ts.Symbol>()):string|undefined=>{
+      node=unwrap(node);
+      if(ts.isStringLiteral(node)||ts.isNoSubstitutionTemplateLiteral(node))return node.text;
+      if(!ts.isIdentifier(node))return undefined;
+      const symbol=symbolOf(node);if(!symbol||seen.has(symbol))return undefined;seen.add(symbol);
+      for(const declaration of symbol.declarations??[]){
+        if(!ts.isVariableDeclaration(declaration)||!declaration.initializer)continue;
+        const list=declaration.parent;
+        if(!ts.isVariableDeclarationList(list)||(list.flags&ts.NodeFlags.Const)===0)continue;
+        const value=literalValueOf(declaration.initializer,seen);if(value!==undefined)return value;
+      }
+      return undefined;
+    };
     const isNamespace=(node:ts.Expression):boolean=>{
       node=unwrap(node);
       if(!ts.isIdentifier(node))return false;
@@ -255,7 +268,7 @@ export function scanInstrumentationEvidence(input:{
       if(ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)&&node.expression.name.text==="trackEvent"&&node.arguments.length>0){
         const receiver=node.expression.expression;
         const argument=unwrap(node.arguments[0]!);
-        const literal=(ts.isStringLiteral(argument)||ts.isNoSubstitutionTemplateLiteral(argument))?argument.text:undefined;
+        const literal=literalValueOf(argument);
         const sdk=sdkOfClient(receiver);
         if(literal===eventName&&sdk){
           const line=sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line+1;

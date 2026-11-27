@@ -4,6 +4,10 @@ import assert from "node:assert/strict";
 import {scanInstrumentationEvidence} from "../src/domain/instrumentation-evidence.js";
 const sha="a".repeat(40);
 const scan=(source:string,eventName="CheckoutStarted")=>scanInstrumentationEvidence({eventName,sourceSha:sha,files:{"src/checkout.ts":source}});
+test("accepts a constant event-name passed to imported Flagsmith client",()=>{
+ const r=scan('import flagsmith from "@flagsmith/flagsmith"; const DEMO_CONVERSION_EVENT="CheckoutStarted"; flagsmith.trackEvent(DEMO_CONVERSION_EVENT);');
+ assert.equal(r.status,"flagsmith_sdk_call_found");assert.equal(r.matches[0]?.api,"trackEvent");
+});
 test("accepts exact event on imported Flagsmith client",()=>{
  const r=scan('import flagsmith from "@flagsmith/flagsmith"; flagsmith.trackEvent("CheckoutStarted");');
  assert.equal(r.status,"flagsmith_sdk_call_found");assert.equal(r.matches[0]?.api,"trackEvent");assert.equal(r.matches[0]?.line,1);
