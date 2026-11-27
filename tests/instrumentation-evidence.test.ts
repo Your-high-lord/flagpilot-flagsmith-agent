@@ -150,6 +150,10 @@ test("does not reject unrelated Object and Reflect operations",()=>{
  const r=scan('import flagsmith from "@flagsmith/flagsmith"; const unrelated:any={}; Object.assign(unrelated,{x:1}); Object.defineProperty(unrelated,"trackEvent",{value:()=>{}}); Reflect.set(unrelated,"trackEvent",()=>{}); flagsmith.trackEvent("CheckoutStarted");');
  assert.equal(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,true);
 });
+test("rejects Object API mutation through an alias assigned after declaration",()=>{
+ const r=scan('declare const fake:any; let objectApi:any={}; objectApi=Object; const alias=objectApi; alias.defineProperty(window,"flagsmith",{value:fake}); window.flagsmith.trackEvent("CheckoutStarted");');
+ assert.notEqual(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,false);
+});
 test("does not reject harmless Object.assign on a verified SDK client",()=>{
  const r=scan('import flagsmith from "@flagsmith/flagsmith"; Object.assign(flagsmith,{metadata:"safe"}); flagsmith.trackEvent("CheckoutStarted");');
  assert.equal(r.status,"flagsmith_sdk_call_found");assert.equal(r.trackingCallFound,true);
