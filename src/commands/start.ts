@@ -32,14 +32,6 @@ const api=new FlagsmithApi({apiKey,environmentKey,...(process.env.FLAGSMITH_API_
 const result=await startExperiment(api,id,{
   allowedStatuses:["created","draft"],
   validateBeforeStart:async experiment=>{
-    verifyExistingExperimentConfiguration({
-      experiment,
-      proposal:artifact.proposal,
-      featureId:artifact.result.feature.id,
-      treatmentOptionId:artifact.result.treatment.id,
-      metricId:artifact.result.metric.id,
-      allowedStatuses:["created","draft"]
-    });
     const feature=await api.getProjectFeature(projectId,artifact.result.feature.id);
     if(!isRecord(feature)||Number(feature.id)!==artifact.result.feature.id||feature.name!==artifact.result.feature.name||feature.type!=="MULTIVARIATE"||feature.initial_value!=="control"||feature.default_enabled!==false) {
       throw new Error("The provisioned feature no longer matches its identity or safe project-level defaults. Refusing to start.");
@@ -58,8 +50,18 @@ const result=await startExperiment(api,id,{
       name:artifact.proposal.metric.name,
       eventName:artifact.proposal.metric.eventName
     });
+  },
+  validateFinalExperiment:experiment=>{
+    verifyExistingExperimentConfiguration({
+      experiment,
+      proposal:artifact.proposal,
+      featureId:artifact.result.feature.id,
+      treatmentOptionId:artifact.result.treatment.id,
+      metricId:artifact.result.metric.id,
+      allowedStatuses:["created","draft"]
+    });
   }
-});
+
 const summary=[
   "## FlagPilot · Verified experiment start",
   "- **Provisioning run:** "+required("PROVISION_RUN_ID"),
