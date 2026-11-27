@@ -288,6 +288,14 @@ export function scanInstrumentationEvidence(input:{
     };
     const reflectionApi=(node:ts.Expression,seen=new Set<ts.Symbol>()):"Object"|"Reflect"|undefined=>{
       node=unwrap(node);
+      // Accept Object/Reflect through a verified browser global only. This
+      // covers globalThis.Reflect, window.Reflect, self.Object and literal
+      // computed forms such as globalThis["Reflect"], without trusting
+      // unrelated objects that happen to expose similarly named properties.
+      if(ts.isPropertyAccessExpression(node)||ts.isElementAccessExpression(node)){
+        const api=propertyName(node);
+        if((api==="Object"||api==="Reflect")&&isGlobalObjectAlias(node.expression))return api;
+      }
       if(!ts.isIdentifier(node))return undefined;
       if((node.text==="Object"||node.text==="Reflect")&&isStandardGlobal(node))return node.text;
       const symbol=symbolOf(node);
