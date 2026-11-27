@@ -70,6 +70,6 @@ test("rejects invalid experiment IDs before reading or writing",async()=>{
 });
 test("rejects when the post-start status cannot be verified",async()=>{
  const f=fakeApi(["created","paused"]);
- await assert.rejects(()=>startExperiment(f.api,596,draftOnly),/Start was not verified/);
+ await assert.rejects(()=>startExperiment(f.api,596,draftOnly),/start was not verified/i);
  assert.equal(f.writes,1);
 });
