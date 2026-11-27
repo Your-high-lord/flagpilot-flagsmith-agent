@@ -288,12 +288,12 @@ export function scanInstrumentationEvidence(input:{
     };
     const reflectionApi=(node:ts.Expression,seen=new Set<ts.Symbol>()):"Object"|"Reflect"|undefined=>{
       node=unwrap(node);
-      // Accept Object/Reflect through a verified browser global only. This
-      // covers globalThis.Reflect, window.Reflect, self.Object and literal
-      // computed forms such as globalThis["Reflect"], without trusting
-      // unrelated objects that happen to expose similarly named properties.
+      // Resolve static string expressions, including const identifiers, before
+      // deciding whether a computed property is the trusted global API name.
+      // Unknown computed keys deliberately do not resolve to Object/Reflect.
       if(ts.isPropertyAccessExpression(node)||ts.isElementAccessExpression(node)){
-        const api=propertyName(node);
+        const api=node.name?.text??(ts.isElementAccessExpression(node)&&node.argumentExpression
+          ?literalValueOf(node.argumentExpression):undefined);
         if((api==="Object"||api==="Reflect")&&isGlobalObjectAlias(node.expression))return api;
       }
       if(!ts.isIdentifier(node))return undefined;
@@ -331,8 +331,13 @@ export function scanInstrumentationEvidence(input:{
         ?["assign","defineProperty","defineProperties","setPrototypeOf"].includes(method)
         :["set","defineProperty","deleteProperty","setPrototypeOf"].includes(method);
       if(ts.isPropertyAccessExpression(node)||ts.isElementAccessExpression(node)){
-        const api=reflectionApi(node.expression),method=propertyName(node);
-        if(api&&method&&allowed(api,method))return{api,method};
+        const api=reflectionApi(node.expression);
+        const method=node.name?.text??(ts.isElementAccessExpression(node)&&node.argumentExpression
+          ?literalValueOf(node.argumentExpression):undefined);
+        if(api){
+          if(method===undefined)return{api,method:"*"};
+          if(allowed(api,method))return{api,method};
+        }
       }
       if(!ts.isIdentifier(node))return undefined;
       const symbol=symbolOf(node);
