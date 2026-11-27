@@ -3,6 +3,7 @@ import {FlagsmithApi,isRecord} from "../flagsmith/api.js";
 import {startExperiment} from "../flagsmith/start.js";
 import {verifyExistingExperimentConfiguration} from "../domain/experiment-reuse.js";
 import {validateProvisioningArtifact} from "../domain/provisioning-artifact.js";
+import {verifyMetricConfiguration} from "../domain/metric-verification.js";
 
 function required(name:string):string {
   const value=process.env[name]?.trim();
@@ -48,6 +49,15 @@ const result=await startExperiment(api,id,{
     if(!treatment||treatment.key!==artifact.result.treatment.key||treatment.string_value!==artifact.result.treatment.value||treatment.default_percentage_allocation!==0) {
       throw new Error("The treatment variation identity, value or project-level default allocation changed after provisioning. Refusing to start.");
     }
+    // Make the metric read the final live configuration read before the start write.
+    // The attached metric ID in the experiment is not sufficient: the metric's
+    // event definition can be edited without changing that ID or display name.
+    const metric=await api.getMetric(artifact.result.metric.id);
+    verifyMetricConfiguration(metric,{
+      id:artifact.result.metric.id,
+      name:artifact.proposal.metric.name,
+      eventName:artifact.proposal.metric.eventName
+    });
   }
 });
 const summary=[
