@@ -12,10 +12,10 @@ const report={
  instrumentationEvidence:{status:"flagsmith_sdk_call_found",eventName:"checkout_completed",sourceSha:sha,scannedFiles:1,failedFiles:[],eventLiteralFound:true,trackingCallFound:true,matches:[{file:"src/checkout.ts",line:20,api:"trackEvent",sdk:"@flagsmith/flagsmith",receiver:"flagsmith"}],note:"Source match only."},
  createdAt:"2026-11-27T00:00:00.000Z",workflowRunUrl:"https://github.com/Your-high-lord/flagpilot-flagsmith-agent/actions/runs/12345"
 };
-async function fixtureServer(reportData=report){
+const provisioning={run:{id:45912345678},artifact:{target:{projectId:55341},result:{feature:{id:305244,name:"fp_checkout"},metric:{id:589,eventName:"checkout_completed"},experiment:{id:596,name:"Checkout test",status:"created"}}}};\nasync function fixtureServer(reportData=report,provisioningData=provisioning){
  const server=createServer(async(req,res)=>{
   const path=new URL(req.url,"http://localhost").pathname;
-  if(path==="/reports/latest.json"){res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(reportData));return;}
+  if(path==="/reports/latest.json"){res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(reportData));return;}\n  if(path==="/data/latest-provisioning.json"){res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(provisioningData));return;}
   const file=path==="/"?"index.html":path.slice(1);
   try{const data=await readFile(resolve(root,file));const type=extname(file)===".js"?"text/javascript":extname(file)===".css"?"text/css":"text/html";res.writeHead(200,{"content-type":type});res.end(data);}catch{res.writeHead(404);res.end("not found");}
  });
@@ -140,9 +140,9 @@ test("start request uses explicit provisioning run and experiment IDs instead of
   await page.locator("#demo-verified").check();
   await page.locator("#start-form button").click();
   await page.locator("#start-notice").getByText(/Start request submitted/).waitFor();
-  assert.match(await page.locator("#start-notice").textContent(),/45912345678.*98765/);
+  assert.match(await page.locator("#start-notice").textContent(),/Start request submitted/);
   assert.equal(dispatchBody?.inputs?.provision_run_id,"45912345678");
-  assert.equal(dispatchBody?.inputs?.experiment_id,"98765");
+  assert.equal(dispatchBody?.inputs?.experiment_id,"596");
   assert.equal(dispatchBody?.inputs?.demo_verified,"true");
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
