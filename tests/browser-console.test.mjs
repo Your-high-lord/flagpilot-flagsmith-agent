@@ -30,7 +30,8 @@ test("dashboard loads, renders report, and parses workflow run ID without browse
  try{
   const page=await browser.newPage();const errors=[];page.on("pageerror",e=>errors.push(e.message));
   await page.goto(url);await page.getByText("Example checkout change").waitFor();
-  assert.equal(await page.locator("#review-run-id").inputValue(),"12345");\n  assert.equal(await page.locator("#review-run-id").isEditable(),false,"the review run ID must be supplied by the current report, not typed by the user");
+  assert.equal(await page.locator("#review-run-id").inputValue(),"12345");
+  assert.equal(await page.locator("#review-run-id").isEditable(),false,"the review run ID must be supplied by the current report, not typed by the user");
   assert.equal(await page.locator("#report-verdict").innerText(),"ready for experiment");
   assert.equal(await page.locator("#promotion-confirm").count(),1);
   assert.equal(await page.locator("#delivery-verified").count(),0);
