@@ -566,7 +566,7 @@ test("embedded SDK demo loads the latest provisioned feature and rechecks enrolm
 
 test("a completed experiment start suppresses approval and blocks a duplicate waiting start request",async()=>{
  const provisionedAt="2026-11-28T14:23:04.000Z";
- const provisioningData={run:{id:46154381541,publishedAt:provisionedAt},artifact:{target:{projectId:55341},createdAt:provisionedAt,proposal:{controlLabel:"Start free trial"},result:{feature:{id:308220,name:"fp_signup_button_label_2f6d0eaad3",url:"https://app.flagsmith.com/project/55341/environment/demo/features/308220"},treatment:{id:38667,key:"try_it_free",value:"Try it free",allocation:50},metric:{id:1763,name:"FP Completed Demo Signups 2f6d0eaad3",eventName:"demo_signup_completed"},experiment:{id:1716,name:"FlagPilot signup wording test",status:"created",url:"https://app.flagsmith.com/project/55341/environment/demo/experiments/1716"}}}}};
+ const provisioningData={run:{id:46154381541,publishedAt:provisionedAt},artifact:{target:{projectId:55341},createdAt:provisionedAt,proposal:{controlLabel:"Start free trial"},result:{feature:{id:308220,name:"fp_signup_button_label_2f6d0eaad3",url:"https://app.flagsmith.com/project/55341/environment/demo/features/308220"},treatment:{id:38667,key:"try_it_free",value:"Try it free",allocation:50},metric:{id:1763,name:"FP Completed Demo Signups 2f6d0eaad3",eventName:"demo_signup_completed"},experiment:{id:1716,name:"FlagPilot signup wording test",status:"created",url:"https://app.flagsmith.com/project/55341/environment/demo/experiments/1716"}}}};
  const {server,url}=await fixtureServer(report,provisioningData);const browser=await chromium.launch({headless:true});
  try{
   const page=await browser.newPage();let dispatchCount=0;
