@@ -112,9 +112,32 @@ jobs:
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
+          name: "flagpilot-pr-plan-pages-${{ github.run_id }}-${{ github.run_attempt }}"
           path: demo
+      - name: Wait for this run's Pages artifact to be visible
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_ARTIFACT: "flagpilot-pr-plan-pages-${{ github.run_id }}-${{ github.run_attempt }}"
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 15); do
+            echo "Checking Pages artifact visibility (attempt ${attempt}/15)…"
+            if artifacts="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" 2>/dev/null)"; then
+              artifact_id="$(jq -r --arg name "$EXPECTED_ARTIFACT" '.artifacts[]? | select(.name == $name) | .id' <<< "$artifacts" | head -n 1)"
+              if [[ -n "$artifact_id" ]]; then
+                echo "Pages artifact is visible (ID $artifact_id)."
+                exit 0
+              fi
+            fi
+            sleep 2
+          done
+          echo "::error::Pages artifact '$EXPECTED_ARTIFACT' did not become visible for this run attempt."
+          exit 1
+
       - name: Publish FlagPilot console state
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        with:
+          artifact_name: "flagpilot-pr-plan-pages-${{ github.run_id }}-${{ github.run_attempt }}"
   provision:
     name: Create Flagsmith draft after human approval
     needs: [prepare, publish-plan]
@@ -207,6 +230,29 @@ jobs:
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
+          name: "flagpilot-pr-provision-pages-${{ github.run_id }}-${{ github.run_attempt }}"
           path: demo
+      - name: Wait for this run's Pages artifact to be visible
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_ARTIFACT: "flagpilot-pr-provision-pages-${{ github.run_id }}-${{ github.run_attempt }}"
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 15); do
+            echo "Checking Pages artifact visibility (attempt ${attempt}/15)…"
+            if artifacts="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" 2>/dev/null)"; then
+              artifact_id="$(jq -r --arg name "$EXPECTED_ARTIFACT" '.artifacts[]? | select(.name == $name) | .id' <<< "$artifacts" | head -n 1)"
+              if [[ -n "$artifact_id" ]]; then
+                echo "Pages artifact is visible (ID $artifact_id)."
+                exit 0
+              fi
+            fi
+            sleep 2
+          done
+          echo "::error::Pages artifact '$EXPECTED_ARTIFACT' did not become visible for this run attempt."
+          exit 1
+
       - name: Publish FlagPilot console state
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        with:
+          artifact_name: "flagpilot-pr-provision-pages-${{ github.run_id }}-${{ github.run_attempt }}"
