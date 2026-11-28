@@ -55,7 +55,7 @@ async function refresh(){
   }));
   live.innerHTML=cards.join("")||"No FlagPilot workflow activity found. Submit a PR analysis or experiment request above; progress will appear here.";
  }catch(e){live.textContent=e.message}
- await loadReport();
+ await Promise.all([loadReport(),loadProposal(),loadProvisioning()]);
  refreshBusy=false;
 }
 live.addEventListener("click",async event=>{
