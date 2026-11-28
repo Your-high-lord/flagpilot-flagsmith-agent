@@ -20,7 +20,7 @@ async function loadProposal(){
   const raw=await response.json(),p=raw.proposal||raw,signature=JSON.stringify(raw);if(signature===lastProposalSignature)return;lastProposalSignature=signature;
   if(!p.experimentName||!p.featureName||!p.hypothesis||!p.metric||!p.treatment)throw Error("Proposal artifact is incomplete.");
   box.innerHTML="<b>Latest AI-generated proposal · review before approval</b><p><strong>"+esc(p.experimentName)+"</strong></p><p>"+esc(p.hypothesis)+"</p><p>Feature: <code>"+esc(p.featureName)+"</code> · Rollout: "+esc(p.rolloutPercentage)+"% · Window: "+esc(p.timeframeDays)+" days</p><div class='proposal-variants'><div><b>Control</b><span>"+esc(p.controlLabel)+" · "+esc(100-p.treatment.allocation)+"%</span></div><div><b>Treatment</b><span>"+esc(p.treatment.value)+" · "+esc(p.treatment.allocation)+"%</span></div></div><p>Metric: <code>"+esc(p.metric.eventName)+"</code> · "+esc(p.metric.name)+"</p><small>Review this proposal before approving the protected Flagsmith creation step. No resource is created by displaying this proposal.</small>";
- }catch(e){box.textContent="No new proposal yet. After you submit a request, the generated proposal will appear here."; }
+ }catch(e){if(lastProposalSignature===null){lastProposalSignature="unavailable";box.textContent="No new proposal yet. After you submit a request, the generated proposal will appear here.";} }
 }
 function stopMonitoring(){
  monitorGeneration++;
