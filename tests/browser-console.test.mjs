@@ -106,7 +106,11 @@ test("dashboard blocks missing metric, incomplete AI evidence, and inapplicable 
  const badReport=structuredClone(report);const {server,url}=await fixtureServer(badReport);const browser=await chromium.launch({headless:true});
  try{
   const page=await browser.newPage();let dispatchCount=0;
-  await page.addInitScript(()=>sessionStorage.setItem("flagpilot-gh-token","fake-token"));
+  await page.addInitScript(()=>{
+    sessionStorage.setItem("flagpilot-gh-token","fake-token");
+    sessionStorage.setItem("flagpilot-review-requested-at",String(Date.parse("2026-11-26T12:00:00.000Z")));
+    sessionStorage.setItem("flagpilot-review-requested-url","https://github.com/example/app/pull/12");
+   });
   await page.route("https://api.github.com/**",async route=>{
    const path=new URL(route.request().url()).pathname;
    if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent"){await route.fulfill({status:200,contentType:"application/json",body:"{}"});return;}
