@@ -506,15 +506,15 @@ test("fails closed for malformed experiment metadata even when inExperiment is t
 test("dashboard displays and submits a real protected Environment approval in FlagPilot",async()=>{
  const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
  try{
-  const page=await browser.newPage();let approvalBody=null;
+  const page=await browser.newPage();let approvalBody=null,approvalRecorded=false;
   await page.addInitScript(()=>sessionStorage.setItem("flagpilot-gh-token","fake-token"));
   await page.route("https://api.github.com/**",async route=>{
    const request=route.request(),path=new URL(request.url()).pathname;
    if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent"){await route.fulfill({status:200,contentType:"application/json",body:"{}"});return;}
    if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent/actions/runs"&&request.method()==="GET"){await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({workflow_runs:[{id:12345,run_number:77,name:"FlagPilot · Promote approved PR review to experiment",path:".github/workflows/promote-pr-review.yml",head_branch:"main",status:"in_progress",conclusion:null,created_at:"2026-11-27T01:00:00Z"}]})});return;}
-   if(path.endsWith("/actions/runs/12345/pending_deployments")&&request.method()==="GET"){await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify([{environment:{id:777,name:"flagsmith-create"},current_user_can_approve:true}])});return;}
+   if(path.endsWith("/actions/runs/12345/pending_deployments")&&request.method()==="GET"){await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(approvalRecorded?[]:[{environment:{id:777,name:"flagsmith-create"},current_user_can_approve:true}])});return;}
    if(path.endsWith("/actions/runs/12345/jobs")&&request.method()==="GET"){await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({jobs:[{name:"Create Flagsmith draft after human approval",status:"waiting",steps:[]}]})});return;}
-   if(path.endsWith("/actions/runs/12345/pending_deployments")&&request.method()==="POST"){approvalBody=request.postDataJSON();await route.fulfill({status:200,contentType:"application/json",body:"[]"});return;}
+   if(path.endsWith("/actions/runs/12345/pending_deployments")&&request.method()==="POST"){approvalBody=request.postDataJSON();approvalRecorded=true;await route.fulfill({status:200,contentType:"application/json",body:"[]"});return;}
    await route.fulfill({status:404,body:"not found"});
   });
   await page.goto(url);
