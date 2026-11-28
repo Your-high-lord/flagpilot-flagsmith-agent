@@ -121,6 +121,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 15); do
+            echo "Checking Pages artifact visibility (attempt ${attempt}/15)…"
             if artifacts="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" 2>/dev/null)"; then
               artifact_id="$(jq -r --arg name "$EXPECTED_ARTIFACT" '.artifacts[]? | select(.name == $name) | .id' <<< "$artifacts" | head -n 1)"
               if [[ -n "$artifact_id" ]]; then
@@ -238,6 +239,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 15); do
+            echo "Checking Pages artifact visibility (attempt ${attempt}/15)…"
             if artifacts="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" 2>/dev/null)"; then
               artifact_id="$(jq -r --arg name "$EXPECTED_ARTIFACT" '.artifacts[]? | select(.name == $name) | .id' <<< "$artifacts" | head -n 1)"
               if [[ -n "$artifact_id" ]]; then
