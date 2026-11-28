@@ -1,7 +1,7 @@
 (() => {
  const $=id=>document.getElementById(id),STORAGE_KEY="flagpilot-demo-identity-v1",CONFIG_KEY="flagpilot-demo-config-v1";
  const DEMO_CONVERSION_EVENT="demo_signup_completed",ATTEMPT_DB="flagpilot-demo-safety",ATTEMPT_STORE="conversion-attempts";
- let identity=localStorage.getItem(STORAGE_KEY)||`fp-demo-${crypto.randomUUID()}`,connected=false,activeConfig=null,sdkInitialised=false,sdkEnvironmentKey=null,enrolled=false,conversionAttempted=false;
+ let identity=localStorage.getItem(STORAGE_KEY)||`fp-demo-${crypto.randomUUID()}`,connected=false,activeConfig=null,sdkInitialised=false,sdkEnvironmentKey=null,enrolled=false,conversionAttempted=false,resumeRefreshBusy=false,lastResumeRefreshAt=0,experimentRefreshTimer=null;
  // Persist the first identity immediately so reloads and other tabs reuse the same visitor.
  localStorage.setItem(STORAGE_KEY,identity);
  const text=(id,value)=>{$(id).textContent=value;};
@@ -95,6 +95,7 @@
       ?`Flagsmith returned experiment ${experiment.name} (#${experiment.id}), but this visitor is not enrolled. Confirm the experiment is running in this Development environment and check its rollout/audience before generating another visitor. No conversion can be sent until enrolment is confirmed.`
       :`The feature connection succeeded and '${label}' was loaded, but Flagsmith returned no experiment metadata. The experiment may still be a draft/not running or may not be linked to this feature in this environment. Verify the experiment is running before generating visitors. No exposure or conversion was recorded.`);
   localStorage.setItem(CONFIG_KEY,JSON.stringify(config));
+  scheduleExperimentRefresh();
  }
  async function newVisitor(){identity=`fp-demo-${crypto.randomUUID()}`;localStorage.setItem(STORAGE_KEY,identity);conversionAttempted=false;text("identity-value",identity);connected=false;enrolled=false;$("conversion-button").disabled=true;$("new-visitor").disabled=true;if(!activeConfig){text("conversion-status","New synthetic visitor created. Connect Flagsmith to evaluate.");return;}try{await connect(activeConfig);}catch(e){text("connection-error",e instanceof Error?e.message:String(e));text("conversion-status","New identity could not be evaluated.");}}
  $("connect-form").addEventListener("submit",async e=>{e.preventDefault();try{await connect(readConfig());}catch(error){connected=false;$("conversion-button").disabled=true;$("new-visitor").disabled=true;text("connection-badge","ERROR");$("connection-badge").className="status status-off";$("connection-error").textContent=error instanceof Error?error.message:String(error);text("result-exposure","Not verified");text("conversion-status","No conversion has been sent.");}});
@@ -125,5 +126,75 @@
   }finally{$("new-visitor").disabled=false;}
  });
  $("new-visitor").addEventListener("click",()=>{void newVisitor();});text("identity-value",identity);
- try{const saved=JSON.parse(localStorage.getItem(CONFIG_KEY)||"null");if(saved&&typeof saved==="object"){$("environment-key").value=saved.environmentKey||"";$("feature-name").value=saved.featureName||"fp_signup_cta_test";$("control-label").value=saved.controlLabel||"Start free trial";$("event-name").value=DEMO_CONVERSION_EVENT;}}catch{}
+ function scheduleExperimentRefresh(){
+  if(experimentRefreshTimer){clearInterval(experimentRefreshTimer);experimentRefreshTimer=null;}
+  if(connected&&!enrolled&&activeConfig){
+   experimentRefreshTimer=setInterval(()=>{if(document.visibilityState==="visible")void refreshIfNeeded();},15000);
+  }
+ }
+ async function refreshIfNeeded(){
+  if(document.visibilityState==="hidden"||!activeConfig||!connected||enrolled||resumeRefreshBusy)return;
+  const now=Date.now();if(now-lastResumeRefreshAt<5000)return;
+  lastResumeRefreshAt=now;resumeRefreshBusy=true;
+  try{await connect(activeConfig);}
+  catch(error){text("connection-error",error instanceof Error?error.message:String(error));}
+  finally{resumeRefreshBusy=false;}
+ }
+ document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")void refreshIfNeeded();});
+ window.addEventListener("focus",()=>{void refreshIfNeeded();});
+ window.addEventListener("message",event=>{
+  if(event.origin!==window.location.origin||event.source!==window.parent||event.data?.type!=="flagpilot-refresh-demo")return;
+  void refreshIfNeeded();
+ });
+ async function restoreLatestDemoConfig(){
+  let saved=null;
+  try{saved=JSON.parse(localStorage.getItem(CONFIG_KEY)||"null");}catch{}
+  if(saved&&typeof saved==="object"){
+   $("environment-key").value=typeof saved.environmentKey==="string"?saved.environmentKey:"";
+   $("feature-name").value=typeof saved.featureName==="string"?saved.featureName:"fp_signup_button_label_2f6d0eaad3";
+   $("control-label").value=typeof saved.controlLabel==="string"?saved.controlLabel:"Start free trial";
+  }
+  $("event-name").value=DEMO_CONVERSION_EVENT;
+  try{
+   const response=await fetch("data/latest-provisioning.json?ts="+Date.now(),{cache:"no-store"});
+   if(response.ok){
+    const data=await response.json(),artifact=data.artifact||{},feature=artifact.result?.feature,metric=artifact.result?.metric,proposal=artifact.proposal;
+    if(typeof feature?.name==="string"&&/^[a-z][a-z0-9_]*$/.test(feature.name)){
+     if(metric?.eventName!==DEMO_CONVERSION_EVENT)throw new Error("The latest provisioned metric is not the fixed Demo Store event. The SDK demo will not send a different event name.");
+     $("feature-name").value=feature.name;
+     if(typeof proposal?.controlLabel==="string"&&proposal.controlLabel.trim())$("control-label").value=proposal.controlLabel;
+     if(saved&&typeof saved==="object"){
+      saved.featureName=feature.name;
+      saved.controlLabel=$("control-label").value;
+      saved.eventName=DEMO_CONVERSION_EVENT;
+      localStorage.setItem(CONFIG_KEY,JSON.stringify(saved));
+     }
+    }
+   }
+  }catch(error){
+   const message=error instanceof Error?error.message:String(error);
+   text("connection-error",message);
+   if(message.includes("latest provisioned metric is not the fixed Demo Store event")){
+    connected=false;$("conversion-button").disabled=true;$("new-visitor").disabled=true;text("connection-badge","ERROR");$("connection-badge").className="status status-off";text("result-exposure","Not verified");text("conversion-status","The latest provisioned metric does not match the fixed demo event. No conversion can be sent.");return;
+   }
+  }
+  const config=readConfig();
+  if(config.environmentKey){
+   try{await connect(config);}
+   catch(error){connected=false;$("conversion-button").disabled=true;$("new-visitor").disabled=true;text("connection-badge","ERROR");$("connection-badge").className="status status-off";text("result-exposure","Not verified");text("connection-error",error instanceof Error?error.message:String(error));text("conversion-status","Saved settings were restored, but the SDK connection could not be revalidated.");}
+  }
+ }
+ void restoreLatestDemoConfig();
+ function reportEmbeddedHeight(){
+  if(window.parent===window)return;
+  const height=Math.max(document.documentElement.scrollHeight,document.body?.scrollHeight||0);
+  window.parent.postMessage({type:"flagpilot-store-height",height},window.location.origin);
+ }
+ if(window.parent!==window){
+  if(typeof ResizeObserver!=="undefined")new ResizeObserver(reportEmbeddedHeight).observe(document.body);
+  window.addEventListener("load",reportEmbeddedHeight);
+  window.addEventListener("resize",reportEmbeddedHeight);
+  setTimeout(reportEmbeddedHeight,300);
+  setTimeout(reportEmbeddedHeight,1200);
+ }
 })();

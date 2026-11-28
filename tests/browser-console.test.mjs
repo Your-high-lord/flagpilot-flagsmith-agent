@@ -29,10 +29,16 @@ test("dashboard loads, renders report, and parses workflow run ID without browse
  const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
  try{
   const page=await browser.newPage();const errors=[];page.on("pageerror",e=>errors.push(e.message));
+  await page.addInitScript(()=>{
+   sessionStorage.setItem("flagpilot-review-requested-at",String(Date.parse("2026-11-26T12:00:00.000Z")));
+   sessionStorage.setItem("flagpilot-review-requested-url","https://github.com/example/app/pull/12");
+  });
   await page.goto(url);await page.getByText("Example checkout change").waitFor();
   assert.equal(await page.locator("#review-run-id").inputValue(),"12345");
   assert.equal(await page.locator("#review-run-id").isEditable(),false,"the review run ID must be supplied by the current report, not typed by the user");
   assert.equal(await page.locator("#report-verdict").innerText(),"ready for experiment");
+  assert.equal(await page.locator("#live-demo-frame").count(),1,"the real SDK demo should be embedded in the control plane");
+  assert.equal(await page.locator('a[href="store.html"]').count(),0,"routine demo use must not navigate to a separate page");
   assert.equal(await page.locator("#promotion-confirm").count(),1);
   assert.equal(await page.locator("#delivery-verified").count(),0);
   await page.locator("#pr-url").fill("https://github.com/example/app/pull/12");
@@ -45,6 +51,10 @@ test("dashboard submits a fully eligible authenticated promotion with explicit c
  const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
  try{
   const page=await browser.newPage();let dispatchBody=null;
+  await page.addInitScript(()=>{
+   sessionStorage.setItem("flagpilot-review-requested-at",String(Date.parse("2026-11-26T12:00:00.000Z")));
+   sessionStorage.setItem("flagpilot-review-requested-url","https://github.com/example/app/pull/12");
+  });
   await page.route("https://api.github.com/**",async route=>{
    const request=route.request(),path=new URL(request.url()).pathname;
    if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent"&&request.method()==="GET"){await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({full_name:"Your-high-lord/flagpilot-flagsmith-agent"})});return;}
@@ -73,7 +83,11 @@ test("dashboard blocks promotion when deterministic source evidence is missing",
  const {server,url}=await fixtureServer(badReport);const browser=await chromium.launch({headless:true});
  try{
   const page=await browser.newPage();let dispatchCount=0;
-  await page.addInitScript(()=>sessionStorage.setItem("flagpilot-gh-token","fake-token"));
+  await page.addInitScript(()=>{
+   sessionStorage.setItem("flagpilot-gh-token","fake-token");
+   sessionStorage.setItem("flagpilot-review-requested-at",String(Date.parse("2026-11-26T12:00:00.000Z")));
+   sessionStorage.setItem("flagpilot-review-requested-url","https://github.com/example/app/pull/12");
+  });
   await page.route("https://api.github.com/**",async route=>{
    const path=new URL(route.request().url()).pathname;
    if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent"){await route.fulfill({status:200,contentType:"application/json",body:"{}"});return;}
@@ -92,7 +106,11 @@ test("dashboard blocks missing metric, incomplete AI evidence, and inapplicable 
  const badReport=structuredClone(report);const {server,url}=await fixtureServer(badReport);const browser=await chromium.launch({headless:true});
  try{
   const page=await browser.newPage();let dispatchCount=0;
-  await page.addInitScript(()=>sessionStorage.setItem("flagpilot-gh-token","fake-token"));
+  await page.addInitScript(()=>{
+    sessionStorage.setItem("flagpilot-gh-token","fake-token");
+    sessionStorage.setItem("flagpilot-review-requested-at",String(Date.parse("2026-11-26T12:00:00.000Z")));
+    sessionStorage.setItem("flagpilot-review-requested-url","https://github.com/example/app/pull/12");
+   });
   await page.route("https://api.github.com/**",async route=>{
    const path=new URL(route.request().url()).pathname;
    if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent"){await route.fulfill({status:200,contentType:"application/json",body:"{}"});return;}
@@ -141,7 +159,7 @@ test("start request uses explicit provisioning run and experiment IDs instead of
   await page.waitForFunction(()=>document.querySelector("#provision-run-id")?.value==="45912345678"&&document.querySelector("#start-experiment-id")?.value==="596");
   await page.locator("#demo-verified").check();
   await page.locator("#start-form button").click();
-  await page.locator("#start-notice").getByText(/Start request submitted/).waitFor();
+  await page.waitForFunction(()=>document.querySelector("#start-notice")?.textContent.includes("Start request submitted"));
   assert.match(await page.locator("#start-notice").textContent(),/Start request submitted/);
   assert.equal(dispatchBody?.inputs?.provision_run_id,"45912345678");
   assert.equal(dispatchBody?.inputs?.experiment_id,"596");
@@ -525,5 +543,88 @@ test("dashboard displays and submits a real protected Environment approval in Fl
   await page.getByRole("button",{name:"Approve flagsmith-create"}).click();
   await page.waitForTimeout(100);
   assert.deepEqual(approvalBody,{environment_ids:[777],state:"approved",comment:"Approved in FlagPilot after reviewing the experiment proposal and target configuration."});
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+
+
+test("embedded SDK demo loads the latest provisioned feature and rechecks enrolment when the page resumes",async()=>{
+ const demoProvisioning={run:{id:45912345679,publishedAt:"2026-11-28T12:00:00.000Z"},artifact:{target:{projectId:55341},proposal:{controlLabel:"Start free trial"},result:{feature:{id:305999,name:"fp_signup_button_label_live"},metric:{id:1763,name:"FP Signup",eventName:"demo_signup_completed"},experiment:{id:1716,name:"FlagPilot signup wording test"}},createdAt:"2026-11-28T11:59:00.000Z"}};
+ const {server,url}=await fixtureServer(report,demoProvisioning);const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{
+   localStorage.setItem("flagpilot-demo-config-v1",JSON.stringify({environmentKey:"public-development-sdk-key",featureName:"fp_old_stale_feature",controlLabel:"Start free trial",eventName:"stale_event"}));
+   window.__flagpilotActive=false;window.__flagpilotIdentifyCalls=0;
+   window.flagsmith={
+    async init(){},
+    async identify(){window.__flagpilotIdentifyCalls++;},
+    getExperimentFlag(name){
+     if(name!=="fp_signup_button_label_live")throw new Error("stale feature name was used");
+     return{enabled:true,value:window.__flagpilotActive?"Try it free":"control",...(window.__flagpilotActive?{experiment:{id:1716,name:"FlagPilot signup wording test",inExperiment:true}}:{})};
+    },
+    trackEvent(){},async flushEvents(){}
+   };
+  });
+  await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  await page.goto(new URL("store.html",url).href);
+  await page.getByText("NO ACTIVE EXPERIMENT",{exact:true}).waitFor();
+  assert.equal(await page.locator("#feature-name").inputValue(),"fp_signup_button_label_live");
+  assert.equal(await page.locator("#event-name").inputValue(),"demo_signup_completed");
+  assert.equal(await page.locator("#conversion-button").isDisabled(),true);
+  await page.evaluate(()=>{window.__flagpilotActive=true;window.dispatchEvent(new Event("focus"));});
+  await page.getByText("ENROLLED",{exact:true}).waitFor();
+  assert.equal(await page.locator("#conversion-button").isDisabled(),false);
+  assert.equal(await page.locator("#conversion-button").innerText(),"Try it free");
+  assert.ok(await page.evaluate(()=>window.__flagpilotIdentifyCalls)>=2,"the SDK should re-identify after returning to the page");
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+
+
+test("a completed experiment start suppresses approval and blocks a duplicate waiting start request",async()=>{
+ const provisionedAt="2026-11-28T14:23:04.000Z";
+ const provisioningData={run:{id:46154381541,publishedAt:provisionedAt},artifact:{target:{projectId:55341},createdAt:provisionedAt,proposal:{controlLabel:"Start free trial"},result:{feature:{id:308220,name:"fp_signup_button_label_2f6d0eaad3",url:"https://app.flagsmith.com/project/55341/environment/demo/features/308220"},treatment:{id:38667,key:"try_it_free",value:"Try it free",allocation:50},metric:{id:1763,name:"FP Completed Demo Signups 2f6d0eaad3",eventName:"demo_signup_completed"},experiment:{id:1716,name:"FlagPilot signup wording test",status:"created",url:"https://app.flagsmith.com/project/55341/environment/demo/experiments/1716"}}}};
+ const {server,url}=await fixtureServer(report,provisioningData);const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();let dispatchCount=0;
+  await page.addInitScript(()=>sessionStorage.setItem("flagpilot-gh-token","fake-token"));
+  await page.route("https://api.github.com/**",async route=>{
+   const request=route.request(),path=new URL(request.url()).pathname;
+   if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent/actions/runs"&&request.method()==="GET"){
+    await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({workflow_runs:[
+     {id:46160123466,run_number:1,path:".github/workflows/start-experiment.yml",head_branch:"main",status:"completed",conclusion:"success",created_at:"2026-11-28T15:29:28Z"},
+     {id:46160626993,run_number:2,path:".github/workflows/start-experiment.yml",head_branch:"main",status:"waiting",conclusion:null,created_at:"2026-11-28T15:35:01Z"}
+    ]})});return;
+   }
+   if(path.endsWith("/actions/runs/46160626993/pending_deployments")&&request.method()==="GET"){
+    await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify([{environment:{id:28610231976,name:"flagsmith-start"},current_user_can_approve:true}])});return;
+   }
+   if(path.endsWith("/actions/runs/46160626993/jobs")&&request.method()==="GET"){
+    await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({jobs:[{name:"Start the verified experiment after second human approval",status:"waiting",steps:[]}]})});return;
+   }
+   if(path.endsWith("/actions/workflows/start-experiment.yml/dispatches")&&request.method()==="POST"){dispatchCount++;await route.fulfill({status:204,body:""});return;}
+   await route.fulfill({status:404,contentType:"application/json",body:"{\"message\":\"not found\"}"});
+  });
+  await page.goto(url);
+  await page.getByText("Duplicate start request",{exact:true}).waitFor();
+  assert.match(await page.locator("#start-notice").innerText(),/successfully started by Run #1/);
+  assert.equal(await page.locator("#start-form button[type=submit]").isDisabled(),true);
+  assert.equal(await page.getByRole("button",{name:"Approve flagsmith-start"}).count(),0,"the duplicate waiting run must not expose an approval button");
+  assert.equal(dispatchCount,0,"dashboard refresh must not dispatch another start request");
+  assert.match(await page.locator("#latest-resource-links").innerText(),/fp_signup_button_label_2f6d0eaad3/);
+  assert.match(await page.locator("#latest-resource-links").innerText(),/1716/);
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+
+
+test("a fresh FlagPilot session never shows an older previously published PR link",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.goto(url);
+  await page.getByText(/Paste a pull request URL and click Analyse this PR/).waitFor();
+  assert.equal(await page.locator("#report-actions").isHidden(),true);
+  assert.equal(await page.locator("#review-run-id").inputValue(),"");
+  assert.equal(await page.getByText("Example checkout change").count(),0);
+  assert.equal(await page.locator("#report-content a").count(),0);
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
