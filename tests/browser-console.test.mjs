@@ -61,7 +61,7 @@ test("dashboard submits a fully eligible authenticated promotion with explicit c
   await page.locator("#save-token").click();
   await page.locator("#promotion-confirm").check();
   await page.locator("#promote-form button").click();
-  await page.getByText(/Request submitted/).waitFor();
+  await page.getByText(/request submitted/i).waitFor();
   assert.equal(dispatchBody?.inputs?.review_run_id,"12345");
   assert.equal(dispatchBody?.inputs?.confirm_event_delivery,"true");
   assert.equal(dispatchBody?.inputs?.confirm_provision,"true");
