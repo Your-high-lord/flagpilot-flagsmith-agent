@@ -33,6 +33,8 @@ test("dashboard loads, renders report, and parses workflow run ID without browse
   assert.equal(await page.locator("#review-run-id").inputValue(),"12345");
   assert.equal(await page.locator("#review-run-id").isEditable(),false,"the review run ID must be supplied by the current report, not typed by the user");
   assert.equal(await page.locator("#report-verdict").innerText(),"ready for experiment");
+  assert.equal(await page.locator("#live-demo-frame").count(),1,"the real SDK demo should be embedded in the control plane");
+  assert.equal(await page.locator('a[href="store.html"]').count(),0,"routine demo use must not navigate to a separate page");
   assert.equal(await page.locator("#promotion-confirm").count(),1);
   assert.equal(await page.locator("#delivery-verified").count(),0);
   await page.locator("#pr-url").fill("https://github.com/example/app/pull/12");
@@ -525,5 +527,38 @@ test("dashboard displays and submits a real protected Environment approval in Fl
   await page.getByRole("button",{name:"Approve flagsmith-create"}).click();
   await page.waitForTimeout(100);
   assert.deepEqual(approvalBody,{environment_ids:[777],state:"approved",comment:"Approved in FlagPilot after reviewing the experiment proposal and target configuration."});
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+
+
+test("embedded SDK demo loads the latest provisioned feature and rechecks enrolment when the page resumes",async()=>{
+ const demoProvisioning={run:{id:45912345679,publishedAt:"2026-11-28T12:00:00.000Z"},artifact:{target:{projectId:55341},proposal:{controlLabel:"Start free trial"},result:{feature:{id:305999,name:"fp_signup_button_label_live"},metric:{id:1763,name:"FP Signup",eventName:"demo_signup_completed"},experiment:{id:1716,name:"FlagPilot signup wording test"}},createdAt:"2026-11-28T11:59:00.000Z"}};
+ const {server,url}=await fixtureServer(report,demoProvisioning);const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{
+   localStorage.setItem("flagpilot-demo-config-v1",JSON.stringify({environmentKey:"public-development-sdk-key",featureName:"fp_old_stale_feature",controlLabel:"Start free trial",eventName:"stale_event"}));
+   window.__flagpilotActive=false;window.__flagpilotIdentifyCalls=0;
+   window.flagsmith={
+    async init(){},
+    async identify(){window.__flagpilotIdentifyCalls++;},
+    getExperimentFlag(name){
+     if(name!=="fp_signup_button_label_live")throw new Error("stale feature name was used");
+     return{enabled:true,value:window.__flagpilotActive?"Try it free":"control",...(window.__flagpilotActive?{experiment:{id:1716,name:"FlagPilot signup wording test",inExperiment:true}}:{})};
+    },
+    trackEvent(){},async flushEvents(){}
+   };
+  });
+  await page.route("https://cdn.jsdelivr.net/npm/@flagsmith/flagsmith@12.5.0/index.js",route=>route.fulfill({status:200,contentType:"text/javascript",body:""}));
+  await page.goto(new URL("store.html",url).href);
+  await page.getByText("NO ACTIVE EXPERIMENT",{exact:true}).waitFor();
+  assert.equal(await page.locator("#feature-name").inputValue(),"fp_signup_button_label_live");
+  assert.equal(await page.locator("#event-name").inputValue(),"demo_signup_completed");
+  assert.equal(await page.locator("#conversion-button").isDisabled(),true);
+  await page.evaluate(()=>{window.__flagpilotActive=true;window.dispatchEvent(new Event("focus"));});
+  await page.getByText("ENROLLED",{exact:true}).waitFor();
+  assert.equal(await page.locator("#conversion-button").isDisabled(),false);
+  assert.equal(await page.locator("#conversion-button").innerText(),"Try it free");
+  assert.ok(await page.evaluate(()=>window.__flagpilotIdentifyCalls)>=2,"the SDK should re-identify after returning to the page");
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });

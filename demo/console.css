@@ -73,3 +73,14 @@
 .proposal-variants b,.proposal-variants span{display:block;font-size:10px}
 .proposal-variants span{margin-top:4px}
 @media(max-width:720px){.workflow-card-head{display:grid}.workflow-state{justify-self:start}.approval-inline .button{width:100%}}
+
+.live-demo-panel{grid-column:1/-1;min-width:0}
+.live-demo-panel iframe{display:block;width:100%;min-height:900px;height:1250px;border:0;border-radius:12px;background:#101827}
+.live-feedback{margin-top:8px;min-height:18px;font-size:10px;line-height:1.5;color:#775b1c;overflow-wrap:anywhere}
+.duplicate-warning{border-color:#e3a5a5;background:#fff0f0}
+.duplicate-warning>b{color:#9a2424}
+.workflow-state.ok{background:#e5f7ed;color:#15834a}
+.workflow-state.bad{background:#fff0f0;color:#ae3030}
+.workflow-state.wait{background:#fff0ce;color:#916000}
+.workflow-state.running{background:#eaf1ff;color:#315ca9}
+@media(max-width:720px){.live-demo-panel iframe{min-height:1500px;height:1850px}}
