@@ -49,7 +49,10 @@ function setTimelineStage(id,state,title,detail,label){
  node.querySelector("span").textContent=label;
 }
 async function updateCreationTimeline(runs){
- const latestPlan=runs.filter(run=>run.path===".github/workflows/plan-and-create.yml"&&run.head_branch==="main").sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at))[0];
+ const candidates=runs.filter(run=>run.path===".github/workflows/plan-and-create.yml"&&run.head_branch==="main").sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at));
+ const provisionTime=Date.parse(latestProvisioning?.run?.publishedAt||latestProvisioning?.artifact?.createdAt||"");
+ const newerActive=candidates.find(run=>run.status!=="completed"&&Number.isFinite(provisionTime)&&Date.parse(run.created_at)>provisionTime);
+ const latestPlan=newerActive||candidates.find(run=>String(run.id)===String(latestProvisioning?.run?.id))||candidates[0];
  if(!latestPlan){
   if(latestProvisioning){
    ["stage-plan-request","stage-plan-generated","stage-plan-published","stage-create-approval","stage-resources-created","stage-resources-verified"].forEach((id,i)=>setTimelineStage(id,"done",["Request received","Gemini plan generated","Validation & preflight","Human approval to create","Create feature, variation, metric and draft","Verify resources"][i],"Verified provisioning result is available.","Complete"));
