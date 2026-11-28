@@ -198,7 +198,7 @@ function updateStartFormState(startRuns){
  const requestedAt=Number(sessionStorage.getItem(key)||0);
  if(requestedAt&&Date.now()-requestedAt<5*60*1000){
   button.disabled=true;button.textContent="Start request submitted";
-  notice.textContent="FlagPilot submitted the start request. Waiting for GitHub to register its workflow run. Refreshing this page will not submit another request.";
+  notice.textContent="Start request submitted. Waiting for GitHub to register its workflow run. Refreshing this page will not submit another request.";
   return;
  }
  if(requestedAt)sessionStorage.removeItem(key);
