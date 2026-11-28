@@ -562,3 +562,39 @@ test("embedded SDK demo loads the latest provisioned feature and rechecks enrolm
   assert.ok(await page.evaluate(()=>window.__flagpilotIdentifyCalls)>=2,"the SDK should re-identify after returning to the page");
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
+
+
+test("a completed experiment start suppresses approval and blocks a duplicate waiting start request",async()=>{
+ const provisionedAt="2026-11-28T14:23:04.000Z";
+ const provisioningData={run:{id:46154381541,publishedAt:provisionedAt},artifact:{target:{projectId:55341},createdAt:provisionedAt,proposal:{controlLabel:"Start free trial"},result:{feature:{id:308220,name:"fp_signup_button_label_2f6d0eaad3",url:"https://app.flagsmith.com/project/55341/environment/demo/features/308220"},treatment:{id:38667,key:"try_it_free",value:"Try it free",allocation:50},metric:{id:1763,name:"FP Completed Demo Signups 2f6d0eaad3",eventName:"demo_signup_completed"},experiment:{id:1716,name:"FlagPilot signup wording test",status:"created",url:"https://app.flagsmith.com/project/55341/environment/demo/experiments/1716"}}}}};
+ const {server,url}=await fixtureServer(report,provisioningData);const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();let dispatchCount=0;
+  await page.addInitScript(()=>sessionStorage.setItem("flagpilot-gh-token","fake-token"));
+  await page.route("https://api.github.com/**",async route=>{
+   const request=route.request(),path=new URL(request.url()).pathname;
+   if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent/actions/runs"&&request.method()==="GET"){
+    await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({workflow_runs:[
+     {id:46160123466,run_number:1,path:".github/workflows/start-experiment.yml",head_branch:"main",status:"completed",conclusion:"success",created_at:"2026-11-28T15:29:28Z"},
+     {id:46160626993,run_number:2,path:".github/workflows/start-experiment.yml",head_branch:"main",status:"waiting",conclusion:null,created_at:"2026-11-28T15:35:01Z"}
+    ]})});return;
+   }
+   if(path.endsWith("/actions/runs/46160626993/pending_deployments")&&request.method()==="GET"){
+    await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify([{environment:{id:28610231976,name:"flagsmith-start"},current_user_can_approve:true}])});return;
+   }
+   if(path.endsWith("/actions/runs/46160626993/jobs")&&request.method()==="GET"){
+    await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({jobs:[{name:"Start the verified experiment after second human approval",status:"waiting",steps:[]}]})});return;
+   }
+   if(path.endsWith("/actions/workflows/start-experiment.yml/dispatches")&&request.method()==="POST"){dispatchCount++;await route.fulfill({status:204,body:""});return;}
+   await route.fulfill({status:404,contentType:"application/json",body:"{\"message\":\"not found\"}"});
+  });
+  await page.goto(url);
+  await page.getByText("Duplicate start request",{exact:true}).waitFor();
+  assert.match(await page.locator("#start-notice").innerText(),/successfully started by Run #1/);
+  assert.equal(await page.locator("#start-form button[type=submit]").isDisabled(),true);
+  assert.equal(await page.getByRole("button",{name:"Approve flagsmith-start"}).count(),0,"the duplicate waiting run must not expose an approval button");
+  assert.equal(dispatchCount,0,"dashboard refresh must not dispatch another start request");
+  assert.match(await page.locator("#latest-resource-links").innerText(),/fp_signup_button_label_2f6d0eaad3/);
+  assert.match(await page.locator("#latest-resource-links").innerText(),/1716/);
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
