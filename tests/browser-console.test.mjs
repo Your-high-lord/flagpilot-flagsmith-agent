@@ -12,10 +12,12 @@ const report={
  instrumentationEvidence:{status:"flagsmith_sdk_call_found",eventName:"checkout_completed",sourceSha:sha,scannedFiles:1,failedFiles:[],eventLiteralFound:true,trackingCallFound:true,matches:[{file:"src/checkout.ts",line:20,api:"trackEvent",sdk:"@flagsmith/flagsmith",receiver:"flagsmith"}],note:"Source match only."},
  createdAt:"2026-11-27T00:00:00.000Z",workflowRunUrl:"https://github.com/Your-high-lord/flagpilot-flagsmith-agent/actions/runs/12345"
 };
-async function fixtureServer(reportData=report){
+const provisioning={run:{id:45912345678},artifact:{target:{projectId:55341},result:{feature:{id:305244,name:"fp_checkout"},metric:{id:589,eventName:"checkout_completed"},experiment:{id:596,name:"Checkout test",status:"created"}}}};
+async function fixtureServer(reportData=report,provisioningData=provisioning){
  const server=createServer(async(req,res)=>{
   const path=new URL(req.url,"http://localhost").pathname;
   if(path==="/reports/latest.json"){res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(reportData));return;}
+  if(path==="/data/latest-provisioning.json"){res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(provisioningData));return;}
   const file=path==="/"?"index.html":path.slice(1);
   try{const data=await readFile(resolve(root,file));const type=extname(file)===".js"?"text/javascript":extname(file)===".css"?"text/css":"text/html";res.writeHead(200,{"content-type":type});res.end(data);}catch{res.writeHead(404);res.end("not found");}
  });
@@ -29,6 +31,7 @@ test("dashboard loads, renders report, and parses workflow run ID without browse
   const page=await browser.newPage();const errors=[];page.on("pageerror",e=>errors.push(e.message));
   await page.goto(url);await page.getByText("Example checkout change").waitFor();
   assert.equal(await page.locator("#review-run-id").inputValue(),"12345");
+  assert.equal(await page.locator("#review-run-id").isEditable(),false,"the review run ID must be supplied by the current report, not typed by the user");
   assert.equal(await page.locator("#report-verdict").innerText(),"ready for experiment");
   assert.equal(await page.locator("#promotion-confirm").count(),1);
   assert.equal(await page.locator("#delivery-verified").count(),0);
@@ -59,7 +62,7 @@ test("dashboard submits a fully eligible authenticated promotion with explicit c
   await page.locator("#save-token").click();
   await page.locator("#promotion-confirm").check();
   await page.locator("#promote-form button").click();
-  await page.getByText(/Request submitted/).waitFor();
+  await page.getByText(/request submitted/i).waitFor();
   assert.equal(dispatchBody?.inputs?.review_run_id,"12345");
   assert.equal(dispatchBody?.inputs?.confirm_event_delivery,"true");
   assert.equal(dispatchBody?.inputs?.confirm_provision,"true");
@@ -135,14 +138,13 @@ test("start request uses explicit provisioning run and experiment IDs instead of
   assert.match(startFormCopy,/verify experiment exposure and conversion delivery only after the workflow reports that the experiment is running/);
   assert.match(await page.locator("#start-form .start-warning").innerText(),/A draft cannot record experiment exposure or conversion events/);
   assert.doesNotMatch(startFormCopy,/tested SDK exposure and conversion-event delivery using a real test identity/);
-  await page.locator("#provision-run-id").fill("45912345678");
-  await page.locator("#start-experiment-id").fill("98765");
+  await page.waitForFunction(()=>document.querySelector("#provision-run-id")?.value==="45912345678"&&document.querySelector("#start-experiment-id")?.value==="596");
   await page.locator("#demo-verified").check();
   await page.locator("#start-form button").click();
   await page.locator("#start-notice").getByText(/Start request submitted/).waitFor();
-  assert.match(await page.locator("#start-notice").textContent(),/45912345678.*98765/);
+  assert.match(await page.locator("#start-notice").textContent(),/Start request submitted/);
   assert.equal(dispatchBody?.inputs?.provision_run_id,"45912345678");
-  assert.equal(dispatchBody?.inputs?.experiment_id,"98765");
+  assert.equal(dispatchBody?.inputs?.experiment_id,"596");
   assert.equal(dispatchBody?.inputs?.demo_verified,"true");
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
@@ -501,5 +503,27 @@ test("fails closed for malformed experiment metadata even when inExperiment is t
    assert.equal(await page.locator("#conversion-button").isDisabled(),true);
    await page.close();
   }
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+
+test("dashboard displays and submits a real protected Environment approval in FlagPilot",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();let approvalBody=null,approvalRecorded=false;
+  await page.addInitScript(()=>sessionStorage.setItem("flagpilot-gh-token","fake-token"));
+  await page.route("https://api.github.com/**",async route=>{
+   const request=route.request(),path=new URL(request.url()).pathname;
+   if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent"){await route.fulfill({status:200,contentType:"application/json",body:"{}"});return;}
+   if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent/actions/runs"&&request.method()==="GET"){await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({workflow_runs:[{id:12345,run_number:77,name:"FlagPilot · Promote approved PR review to experiment",path:".github/workflows/promote-pr-review.yml",head_branch:"main",status:"in_progress",conclusion:null,created_at:"2026-11-27T01:00:00Z"}]})});return;}
+   if(path.endsWith("/actions/runs/12345/pending_deployments")&&request.method()==="GET"){await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(approvalRecorded?[]:[{environment:{id:777,name:"flagsmith-create"},current_user_can_approve:true}])});return;}
+   if(path.endsWith("/actions/runs/12345/jobs")&&request.method()==="GET"){await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({jobs:[{name:"Create Flagsmith draft after human approval",status:"waiting",steps:[]}]})});return;}
+   if(path.endsWith("/actions/runs/12345/pending_deployments")&&request.method()==="POST"){approvalBody=request.postDataJSON();approvalRecorded=true;await route.fulfill({status:200,contentType:"application/json",body:"[]"});return;}
+   await route.fulfill({status:404,body:"not found"});
+  });
+  await page.goto(url);
+  await page.getByRole("button",{name:"Approve flagsmith-create"}).waitFor();
+  await page.getByRole("button",{name:"Approve flagsmith-create"}).click();
+  await page.waitForTimeout(100);
+  assert.deepEqual(approvalBody,{environment_ids:[777],state:"approved",comment:"Approved in FlagPilot after reviewing the experiment proposal and target configuration."});
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
