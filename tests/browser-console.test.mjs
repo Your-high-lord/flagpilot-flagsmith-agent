@@ -12,7 +12,8 @@ const report={
  instrumentationEvidence:{status:"flagsmith_sdk_call_found",eventName:"checkout_completed",sourceSha:sha,scannedFiles:1,failedFiles:[],eventLiteralFound:true,trackingCallFound:true,matches:[{file:"src/checkout.ts",line:20,api:"trackEvent",sdk:"@flagsmith/flagsmith",receiver:"flagsmith"}],note:"Source match only."},
  createdAt:"2026-11-27T00:00:00.000Z",workflowRunUrl:"https://github.com/Your-high-lord/flagpilot-flagsmith-agent/actions/runs/12345"
 };
-const provisioning={run:{id:45912345678},artifact:{target:{projectId:55341},result:{feature:{id:305244,name:"fp_checkout"},metric:{id:589,eventName:"checkout_completed"},experiment:{id:596,name:"Checkout test",status:"created"}}}};\nasync function fixtureServer(reportData=report,provisioningData=provisioning){
+const provisioning={run:{id:45912345678},artifact:{target:{projectId:55341},result:{feature:{id:305244,name:"fp_checkout"},metric:{id:589,eventName:"checkout_completed"},experiment:{id:596,name:"Checkout test",status:"created"}}}};
+async function fixtureServer(reportData=report,provisioningData=provisioning){
  const server=createServer(async(req,res)=>{
   const path=new URL(req.url,"http://localhost").pathname;
   if(path==="/reports/latest.json"){res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(reportData));return;}\n  if(path==="/data/latest-provisioning.json"){res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(provisioningData));return;}
