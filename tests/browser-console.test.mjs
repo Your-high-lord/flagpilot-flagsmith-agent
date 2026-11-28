@@ -143,7 +143,7 @@ test("start request uses explicit provisioning run and experiment IDs instead of
   await page.waitForFunction(()=>document.querySelector("#provision-run-id")?.value==="45912345678"&&document.querySelector("#start-experiment-id")?.value==="596");
   await page.locator("#demo-verified").check();
   await page.locator("#start-form button").click();
-  await page.locator("#start-notice").getByText(/Start request submitted/).waitFor();
+  await page.waitForFunction(()=>document.querySelector("#start-notice")?.textContent.includes("Start request submitted"));
   assert.match(await page.locator("#start-notice").textContent(),/Start request submitted/);
   assert.equal(dispatchBody?.inputs?.provision_run_id,"45912345678");
   assert.equal(dispatchBody?.inputs?.experiment_id,"596");
