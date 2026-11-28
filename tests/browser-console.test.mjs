@@ -29,6 +29,10 @@ test("dashboard loads, renders report, and parses workflow run ID without browse
  const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
  try{
   const page=await browser.newPage();const errors=[];page.on("pageerror",e=>errors.push(e.message));
+  await page.addInitScript(()=>{
+   sessionStorage.setItem("flagpilot-review-requested-at",String(Date.parse("2026-11-26T12:00:00.000Z")));
+   sessionStorage.setItem("flagpilot-review-requested-url","https://github.com/example/app/pull/12");
+  });
   await page.goto(url);await page.getByText("Example checkout change").waitFor();
   assert.equal(await page.locator("#review-run-id").inputValue(),"12345");
   assert.equal(await page.locator("#review-run-id").isEditable(),false,"the review run ID must be supplied by the current report, not typed by the user");
@@ -47,6 +51,10 @@ test("dashboard submits a fully eligible authenticated promotion with explicit c
  const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
  try{
   const page=await browser.newPage();let dispatchBody=null;
+  await page.addInitScript(()=>{
+   sessionStorage.setItem("flagpilot-review-requested-at",String(Date.parse("2026-11-26T12:00:00.000Z")));
+   sessionStorage.setItem("flagpilot-review-requested-url","https://github.com/example/app/pull/12");
+  });
   await page.route("https://api.github.com/**",async route=>{
    const request=route.request(),path=new URL(request.url()).pathname;
    if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent"&&request.method()==="GET"){await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({full_name:"Your-high-lord/flagpilot-flagsmith-agent"})});return;}
@@ -75,7 +83,11 @@ test("dashboard blocks promotion when deterministic source evidence is missing",
  const {server,url}=await fixtureServer(badReport);const browser=await chromium.launch({headless:true});
  try{
   const page=await browser.newPage();let dispatchCount=0;
-  await page.addInitScript(()=>sessionStorage.setItem("flagpilot-gh-token","fake-token"));
+  await page.addInitScript(()=>{
+   sessionStorage.setItem("flagpilot-gh-token","fake-token");
+   sessionStorage.setItem("flagpilot-review-requested-at",String(Date.parse("2026-11-26T12:00:00.000Z")));
+   sessionStorage.setItem("flagpilot-review-requested-url","https://github.com/example/app/pull/12");
+  });
   await page.route("https://api.github.com/**",async route=>{
    const path=new URL(route.request().url()).pathname;
    if(path==="/repos/Your-high-lord/flagpilot-flagsmith-agent"){await route.fulfill({status:200,contentType:"application/json",body:"{}"});return;}
@@ -596,5 +608,19 @@ test("a completed experiment start suppresses approval and blocks a duplicate wa
   assert.equal(dispatchCount,0,"dashboard refresh must not dispatch another start request");
   assert.match(await page.locator("#latest-resource-links").innerText(),/fp_signup_button_label_2f6d0eaad3/);
   assert.match(await page.locator("#latest-resource-links").innerText(),/1716/);
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+});
+
+
+test("a fresh FlagPilot session never shows an older previously published PR link",async()=>{
+ const {server,url}=await fixtureServer();const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage();
+  await page.goto(url);
+  await page.getByText(/Paste a pull request URL and click Analyse this PR/).waitFor();
+  assert.equal(await page.locator("#report-actions").isHidden(),true);
+  assert.equal(await page.locator("#review-run-id").inputValue(),"");
+  assert.equal(await page.getByText("Example checkout change").count(),0);
+  assert.equal(await page.locator("#report-content a").count(),0);
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
