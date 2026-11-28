@@ -5,6 +5,7 @@ on:
     paths: ["demo/**", ".github/workflows/deploy-demo.yml"]
   workflow_dispatch:
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -23,7 +24,29 @@ jobs:
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
+          name: "flagpilot-deploy-${{ github.run_id }}-${{ github.run_attempt }}"
           path: demo
+      - name: Wait for this run's Pages artifact to be visible
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_ARTIFACT: "flagpilot-deploy-${{ github.run_id }}-${{ github.run_attempt }}"
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 15); do
+            if artifacts="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" 2>/dev/null)"; then
+              artifact_id="$(jq -r --arg name "$EXPECTED_ARTIFACT" '.artifacts[]? | select(.name == $name) | .id' <<< "$artifacts" | head -n 1)"
+              if [[ -n "$artifact_id" ]]; then
+                echo "Pages artifact is visible (ID $artifact_id)."
+                exit 0
+              fi
+            fi
+            sleep 2
+          done
+          echo "::error::Pages artifact '$EXPECTED_ARTIFACT' did not become visible for this run attempt."
+          exit 1
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        with:
+          artifact_name: "flagpilot-deploy-${{ github.run_id }}-${{ github.run_attempt }}"
