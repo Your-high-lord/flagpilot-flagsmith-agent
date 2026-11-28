@@ -29,7 +29,7 @@ export async function createProposal(request:string):Promise<ExperimentProposal>
  const primary=process.env.GEMINI_MODEL||"gemini-3.8-flash";
  const fallback=process.env.GEMINI_FALLBACK_MODEL||"gemini-3.5-flash-lite";
  let result=await callModel(primary,key,request);
- if(!result.text&&result.status===503&&fallback!==primary){
+ if(!result.text&&(result.status===503||Boolean(result.error?.startsWith("Network error calling ")))&&fallback!==primary){
   console.warn(`Primary model ${primary} is temporarily overloaded; retrying with fallback ${fallback}.`);
   result=await callModel(fallback,key,request);
  }
