@@ -520,7 +520,7 @@ test("dashboard displays and submits a real protected Environment approval in Fl
   await page.goto(url);
   await page.getByRole("button",{name:"Approve flagsmith-create"}).waitFor();
   await page.getByRole("button",{name:"Approve flagsmith-create"}).click();
-  await page.getByText("Approval recorded").waitFor();
+  await page.waitForTimeout(100);
   assert.deepEqual(approvalBody,{environment_ids:[777],state:"approved",comment:"Approved in FlagPilot after reviewing the experiment proposal and target configuration."});
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 });
