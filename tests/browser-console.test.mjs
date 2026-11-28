@@ -135,8 +135,7 @@ test("start request uses explicit provisioning run and experiment IDs instead of
   assert.match(startFormCopy,/verify experiment exposure and conversion delivery only after the workflow reports that the experiment is running/);
   assert.match(await page.locator("#start-form .start-warning").innerText(),/A draft cannot record experiment exposure or conversion events/);
   assert.doesNotMatch(startFormCopy,/tested SDK exposure and conversion-event delivery using a real test identity/);
-  await page.locator("#provision-run-id").fill("45912345678");
-  await page.locator("#start-experiment-id").fill("98765");
+  await page.waitForFunction(()=>document.querySelector("#provision-run-id")?.value==="45912345678"&&document.querySelector("#start-experiment-id")?.value==="596");
   await page.locator("#demo-verified").check();
   await page.locator("#start-form button").click();
   await page.locator("#start-notice").getByText(/Start request submitted/).waitFor();
