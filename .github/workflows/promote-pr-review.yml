@@ -84,9 +84,40 @@ jobs:
           path: artifacts/plan.json
           if-no-files-found: error
           retention-days: 3
+  publish-plan:
+    name: Publish validated experiment proposal in FlagPilot
+    needs: [prepare]
+    if: ${{ github.ref == 'refs/heads/main' && needs.prepare.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: flagpilot-pr-derived-plan
+          path: artifacts/plan
+      - name: Publish proposal JSON to FlagPilot
+        run: |
+          set -euo pipefail
+          mkdir -p demo/data
+          cp artifacts/plan/plan.json demo/data/latest-proposal.json
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: demo
+      - name: Publish FlagPilot console state
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
   provision:
     name: Create Flagsmith draft after human approval
-    needs: [prepare]
+    needs: [prepare, publish-plan]
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     environment:
