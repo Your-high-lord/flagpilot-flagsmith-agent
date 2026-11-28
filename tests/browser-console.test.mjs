@@ -16,7 +16,8 @@ const provisioning={run:{id:45912345678},artifact:{target:{projectId:55341},resu
 async function fixtureServer(reportData=report,provisioningData=provisioning){
  const server=createServer(async(req,res)=>{
   const path=new URL(req.url,"http://localhost").pathname;
-  if(path==="/reports/latest.json"){res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(reportData));return;}\n  if(path==="/data/latest-provisioning.json"){res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(provisioningData));return;}
+  if(path==="/reports/latest.json"){res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(reportData));return;}
+  if(path==="/data/latest-provisioning.json"){res.writeHead(200,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(provisioningData));return;}
   const file=path==="/"?"index.html":path.slice(1);
   try{const data=await readFile(resolve(root,file));const type=extname(file)===".js"?"text/javascript":extname(file)===".css"?"text/css":"text/html";res.writeHead(200,{"content-type":type});res.end(data);}catch{res.writeHead(404);res.end("not found");}
  });
