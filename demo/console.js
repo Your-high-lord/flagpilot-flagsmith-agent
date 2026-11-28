@@ -98,14 +98,14 @@ async function updateCreationTimeline(runs){
  const preflight=(create?.steps||[]).find(step=>/read-only Flagsmith preflight/i.test(step.name||""));
  const preflightPassed=preflight?.conclusion==="success";
  const stage3Passed=publishState.label==="Passed"&&preflightPassed;
- const stage3State=stage3Passed?"done":preflight?.conclusion&&preflight.conclusion!=="success"?"failed":publishState.state;
- const stage3Detail=stage3Passed?"Proposal schema, publication and read-only Flagsmith preflight succeeded in Run #"+latestPlan.run_number+".":preflight?.conclusion==="success"?"Read-only Flagsmith preflight passed.":publishState.detail;
- setTimelineStage("stage-plan-published",stage3State,stage3Passed?"Validation & preflight":"Validation & preflight",stage3Detail,stage3Passed?"Passed":preflight?.conclusion||publishState.label);
+ const stage3State=publishState.state;
+ const stage3Detail=publishState.label==="Passed"?"Gemini proposal passed schema validation and was published to FlagPilot in Run #"+latestPlan.run_number+".":publishState.detail;
+ setTimelineStage("stage-plan-published",stage3State,"Proposal validation & publication",stage3Detail,publishState.label);
  const c=status(create,"Flagsmith creation approved","Human approval to create","Flagsmith creation failed","Waiting for the protected flagsmith-create approval.");
  setTimelineStage("stage-create-approval",c.state,c.title,c.detail,c.label);
  const createStep=(create?.steps||[]).find(step=>step.name==="Provision real Flagsmith resources");
  const created= createStep?.conclusion==="success";
- setTimelineStage("stage-resources-created",created?"done":createStep?.conclusion&&createStep.conclusion!=="success"?"failed":create?.status==="waiting"?"wait":"",created?"Flagsmith resources created":"Create feature, variation, metric and draft",created?"Feature, treatment, metric and draft created in the verified project.":"Waiting for approved provisioning.",created?"Created":createStep?.conclusion||"Pending");
+ setTimelineStage("stage-resources-created",created?"done":createStep?.conclusion&&createStep.conclusion!=="success"?"failed":create?.status==="waiting"?"wait":"",created?"Flagsmith resources created":"Read-only preflight & resource creation",created?"Read-only preflight passed; feature, treatment, metric and draft were created and read back.":"After approval, FlagPilot checks the target before creating resources.",created?"Created":createStep?.conclusion||"Pending");
  const verified=result?.conclusion==="success"||Boolean(latestProvisioning);
  setTimelineStage("stage-resources-verified",verified?"done":result?.conclusion&&result.conclusion!=="success"?"failed":"",verified?"Verify resources":"Verify resources",verified?"Management API read-back and provisioning artifact publication succeeded.":"Waiting for resource read-back and publication.",verified?"Passed":result?.conclusion||"Pending");
  if(!first&&latestProvisioning&&latestProvisioning.run?.id===latestPlan.id){
@@ -196,7 +196,7 @@ async function refresh(){
  refreshBusy=true;
  try{
   const data=await gh("/repos/"+REPO+"/actions/runs?branch=main&per_page=50");
-  const allowed=new Set([".github/workflows/review-pull-request.yml",".github/workflows/promote-pr-review.yml",".github/workflows/plan-and-create.yml",".github/workflows/start-experiment.yml",".github/workflows/plan-only.yml",".github/workflows/setup-flagsmith.yml",".github/workflows/deploy-demo.yml"]);
+  const allowed=new Set([".github/workflows/ci.yml",".github/workflows/review-pull-request.yml",".github/workflows/promote-pr-review.yml",".github/workflows/plan-and-create.yml",".github/workflows/start-experiment.yml",".github/workflows/plan-only.yml",".github/workflows/setup-flagsmith.yml",".github/workflows/deploy-demo.yml"]);
   const runs=(data.workflow_runs||[]).filter(run=>allowed.has(run.path)&&run.head_branch==="main");
   const visibleRuns=runs.slice(0,15);
   await Promise.all([loadReport(),loadProposal(),loadProvisioning()]);
@@ -213,7 +213,7 @@ async function refresh(){
     try{const jobs=await gh("/repos/"+REPO+"/actions/runs/"+run.id+"/jobs?per_page=20");const current=(jobs.jobs||[]).find(job=>job.status==="in_progress"||job.status==="queued"||job.status==="waiting");if(current)jobText=current.name+" · "+current.status;}
     catch(error){if(!jobText)jobText="Workflow is running";}
    }
-   const label=run.path.includes("review-pull-request")?"AI engineering review":run.path.includes("promote-pr-review")?"Create draft from PR review":run.path.includes("start-experiment")?"Start verified experiment":run.path.includes("plan-and-create")?"Plan and create experiment":run.path.includes("plan-only")?"Generate AI proposal":run.path.includes("setup-flagsmith")?"Set up Flagsmith":"Deploy FlagPilot console";
+   const label=run.path.includes("/ci.yml")?"Main CI":run.path.includes("review-pull-request")?"AI engineering review":run.path.includes("promote-pr-review")?"Create draft from PR review":run.path.includes("start-experiment")?"Start verified experiment":run.path.includes("plan-and-create")?"Plan and create experiment":run.path.includes("plan-only")?"Generate AI proposal":run.path.includes("setup-flagsmith")?"Set up Flagsmith":"Deploy FlagPilot console";
    const duplicate=duplicateStart&&run.id===duplicateStart.id;
    const state=duplicate?"Duplicate request · earlier start succeeded":run.status==="completed"?(run.conclusion==="success"?"Completed successfully":"Completed · "+String(run.conclusion||"unknown")):pending.length?"Waiting for protected approval":run.status;
    const approvals=pending.map(item=>{
